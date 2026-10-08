@@ -12,10 +12,20 @@ final class Prefs {
     static final String SEND_ID = "send_id";
     static final String STATUS = "status";
     static final String DIAGNOSTICS = "diagnostics";
+    private static final String SAFE_MIGRATED = "safe_migrated_v2";
 
     private Prefs() { }
     static SharedPreferences get(Context c) {
-        return c.getSharedPreferences("text_call_lab_local", Context.MODE_PRIVATE);
+        SharedPreferences p = c.getSharedPreferences("text_call_lab_local", Context.MODE_PRIVATE);
+        // One-time privacy migration: discard ALL diagnostics from the older APK.
+        // Require explicit user consent to resume scanning. Never auto-send.
+        if (!p.getBoolean(SAFE_MIGRATED, false)) {
+            p.edit().remove(DIAGNOSTICS).remove(STATUS)
+                    .putBoolean(ENABLED, false)
+                    .putBoolean(AUTO_SEND, false)
+                    .putBoolean(SAFE_MIGRATED, true).commit();
+        }
+        return p;
     }
     static String value(SharedPreferences p, String key, String fallback) {
         return p.getString(key, fallback);
