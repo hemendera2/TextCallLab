@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Private, offline model runtime. JNI/llama.cpp runs only on this phone.
@@ -24,6 +25,7 @@ public final class LocalModel {
         t.setPriority(Thread.NORM_PRIORITY - 1);
         return t;
     });
+    private final AtomicLong generationKey = new AtomicLong();
     private static final String LOCAL_FILE = "secretary-model.gguf";
     private static volatile boolean nativeAvailable;
     private static final String nativeFailure;
@@ -48,6 +50,7 @@ public final class LocalModel {
     }
     /** Cooperative cancel; native inference checks it after each prefill/decode chunk. */
     public void cancel() {
+        generationKey.incrementAndGet();
         if (!nativeAvailable) return;
         try { nativeCancel(); } catch (Throwable ignored) { }
     }
@@ -115,10 +118,19 @@ public final class LocalModel {
     public void reply(String owner, String facts, String rules,
                       List<String> history, String caller, TextCallback callback) {
         if (!loaded) { callback.done("", "Model not loaded", 0); return; }
+        final long id = generationKey.incrementAndGet();
         serial.execute(() -> {
+            if (generationKey.get() != id) {
+                callback.done("", "Cancelled before inference started", 0);
+                return;
+            }
             long begin = SystemClock.elapsedRealtime();
             String prompt = PromptFormatter.format(owner, facts, rules, history, caller);
             String response = nativeGenerate(prompt, 48);
+            if (generationKey.get() != id) {
+                callback.done("", "Cancelled", SystemClock.elapsedRealtime() - begin);
+                return;
+            }
             String cleaned = PromptFormatter.clean(response);
             if (cleaned.isEmpty()) callback.done("", "No usable reply. " + progress(), SystemClock.elapsedRealtime() - begin);
             else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
@@ -127,11 +139,16 @@ public final class LocalModel {
     /** Summarizes caller phrases on-device, never uploads them. */
     public void summarize(List<String> callerPhrases, TextCallback callback) {
         if (!loaded) { callback.done("", "Model not loaded", 0); return; }
+        final long id = generationKey.incrementAndGet();
         serial.execute(() -> {
+            if (generationKey.get() != id) {
+                callback.done("", "Cancelled before summary", 0);
+                return;
+            }
             long begin = SystemClock.elapsedRealtime();
-            String answer = nativeGenerate(PromptFormatter.brief(callerPhrases), 110);
-            String cleaned = PromptFormatter.clean(answer);
-            if (cleaned.isEmpty()) callback.done("", "Summary unavailable. " + progress(), SystemClock.elapsedRealtime() - begin);
+            String answer = nativeGenerate(PromptFormatter.brief(callerPhrases), 64);
+            String cleaned = generationKey.get() == id ? PromptFormatter.clean(answer) : "";
+            if (cleaned.isEmpty()) callback.done("", "Summary unavailable or cancelled. " + progress(), SystemClock.elapsedRealtime() - begin);
             else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
         });
     }
