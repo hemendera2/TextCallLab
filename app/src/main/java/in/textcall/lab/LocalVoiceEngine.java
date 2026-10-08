@@ -53,6 +53,13 @@ final class LocalVoiceEngine {
             offline.clear();
             if (ready) {
                 activeEngine = tts.getDefaultEngine();
+                if (!requested.isEmpty()) {
+                    boolean installed = false;
+                    for (TextToSpeech.EngineInfo e : tts.getEngines()) {
+                        if (requested.equals(e.name)) { installed = true; break; }
+                    }
+                    if (installed) activeEngine = requested;
+                }
                 try {
                     Set<Voice> listed = tts.getVoices();
                     if (listed != null) for (Voice voice : listed) {
