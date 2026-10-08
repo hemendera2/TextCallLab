@@ -15,24 +15,27 @@
     <!-- No INTERNET, READ_PHONE_STATE or call-log permissions. -->
     <application
         android:allowBackup="false"
-        android:label="CallCompanion"
+        android:label="KALLVO"
         android:icon="@drawable/app_mark"
         android:roundIcon="@drawable/app_mark"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
-            android:name=".MainActivity"
+            android:name=".SecretaryActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
         <service
             android:name=".BixbyAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
-            android:label="TextCall Lab - Bixby screen access">
+            android:label="KALLVO - Samsung Call Access">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
