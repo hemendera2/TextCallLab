@@ -17,6 +17,9 @@ final class Prefs {
     static final String STYLE = "voice_style";
     static final String SPEED = "speech_rate";
     static final String FLOATING = "floating_panel";
+    static final String AUTO_ATTEND = "auto_attend_samsung_v1";
+    static final String LIVE_REPLY = "live_reply_samsung_v1";
+    static final String SAVE_BRIEF = "save_encrypted_call_brief_v1";
     static final String PROBE = "diagnostic_enabled";
     static final String PROFILE_NAME = "profile_name";
     static final String PROFILE_INFO = "profile_info";
