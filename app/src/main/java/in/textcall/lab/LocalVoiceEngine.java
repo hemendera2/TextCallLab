@@ -2,13 +2,14 @@ package in.textcall.lab;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -16,13 +17,14 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Native Android TTS engine adapter. Neural engines such as Piper/Kokoro can
- * expose voices via the standard Android TextToSpeech service. No GPL code or
- * model is copied into this app; the user explicitly installs the engine/pack.
- * Gender is stated only when it is encoded in known model speaker IDs.
+ * Android neural/offline speech bridge, including VoxSherpa.
+ * A voice listed by TTS is NOT proof that synthesis can actually produce audio.
+ * Track progress and asynchronous error callbacks; never count a TTS error as
+ * successful playback, nor silently substitute another voice.
  */
 final class LocalVoiceEngine {
     interface Callback { void onReady(boolean ok); }
+    interface VoiceStatus { void onStatus(String status); }
     private final Context context;
     private final SharedPreferences settings;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -30,57 +32,87 @@ final class LocalVoiceEngine {
     private TextToSpeech tts;
     private boolean ready;
     private String activeEngine = "";
+    private String lastStatus = "Voice engine not initialized";
+    private String currentUtterance = "";
+    private String stage = "";
     private long serial;
+    private long playbackEpoch;
+    private VoiceStatus statusListener;
+
     LocalVoiceEngine(Context context, SharedPreferences settings) {
         this.context = context.getApplicationContext();
         this.settings = settings;
     }
+    void setStatusListener(VoiceStatus listener) {
+        statusListener = listener;
+        if (listener != null) listener.onStatus(lastStatus);
+    }
+    String lastStatus() { return lastStatus; }
+    private void update(String status) {
+        lastStatus = status;
+        if (statusListener != null) main.post(() -> {
+            if (statusListener != null) statusListener.onStatus(status);
+        });
+    }
     void start(Callback callback) { useEngine(settings.getString(Prefs.TTS_ENGINE, ""), callback); }
+
     void useEngine(String packageName, Callback callback) {
         serial++;
-        long ticket = serial;
+        final long ticket = serial;
+        playbackEpoch++;
+        currentUtterance = "";
         TextToSpeech previous = tts;
         tts = null;
         ready = false;
+        activeEngine = "";
         offline.clear();
         if (previous != null) {
             try { previous.stop(); previous.shutdown(); } catch (Exception ignored) { }
         }
         final String requested = packageName == null ? "" : packageName;
+        update("Connecting " + (requested.isEmpty() ? "Android default voice" : requested) + "…");
         TextToSpeech.OnInitListener listener = result -> main.post(() -> {
             if (ticket != serial) return;
             ready = result == TextToSpeech.SUCCESS && tts != null;
             offline.clear();
             if (ready) {
-                activeEngine = tts.getDefaultEngine();
-                if (!requested.isEmpty()) {
-                    boolean installed = false;
-                    for (TextToSpeech.EngineInfo e : tts.getEngines()) {
-                        if (requested.equals(e.name)) { installed = true; break; }
+                String actual = tts.getCurrentEngine();
+                activeEngine = actual == null ? "" : actual;
+                // Android TextToSpeech may silently fall back to the system engine.
+                // Warn instead of misrepresenting this as a working neural engine.
+                if (!requested.isEmpty() && !requested.equals(activeEngine)) {
+                    ready = false;
+                    update("Requested speech engine not connected. Android used: " + activeEngine);
+                } else {
+                    try {
+                        Set<Voice> listed = tts.getVoices();
+                        if (listed != null) for (Voice voice : listed) {
+                            if (voice == null || voice.getLocale() == null
+                                    || voice.isNetworkConnectionRequired()) continue;
+                            Set<String> features = voice.getFeatures();
+                            if (features != null
+                                    && features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                            offline.add(voice);
+                        }
+                        offline.sort(Comparator.comparingInt((Voice v) -> -v.getQuality())
+                                .thenComparing(v -> v.getLocale().getDisplayName(Locale.ENGLISH))
+                                .thenComparing(Voice::getName));
+                        update("Speech engine connected • " + offline.size()
+                                + " installed offline speaker(s) available");
+                    } catch (Exception error) {
+                        ready = false;
+                        update("Voice list could not load: " + error.getClass().getSimpleName());
                     }
-                    if (installed) activeEngine = requested;
                 }
-                try {
-                    Set<Voice> listed = tts.getVoices();
-                    if (listed != null) for (Voice voice : listed) {
-                        if (voice == null || voice.getLocale() == null
-                                || voice.isNetworkConnectionRequired()) continue;
-                        Set<String> features = voice.getFeatures();
-                        if (features != null && features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED))
-                            continue;
-                        offline.add(voice);
-                    }
-                    offline.sort(Comparator
-                            .comparingInt((Voice v) -> -v.getQuality())
-                            .thenComparing(v -> v.getLocale().getDisplayName(Locale.ENGLISH))
-                            .thenComparing(Voice::getName));
-                } catch (Exception ignored) { ready = false; }
+            } else {
+                update("Speech engine initialization failed; check Android Text-to-speech settings");
             }
             if (callback != null) callback.onReady(ready);
         });
         if (requested.isEmpty()) tts = new TextToSpeech(context, listener);
         else tts = new TextToSpeech(context, listener, requested);
     }
+
     String activeEngine() { return activeEngine; }
     boolean ready() { return ready; }
     List<Voice> voices() { return new ArrayList<>(offline); }
@@ -101,10 +133,12 @@ final class LocalVoiceEngine {
     static String gender(Voice voice) {
         if (voice == null) return "";
         String id = voice.getName().toLowerCase(Locale.ROOT);
-        // Named Kokoro speaker identifiers, not a fabricated pitch-based gender.
-        if (id.matches(".*(^|[^a-z])(af|bf|hf|ef|ff|if|pf|jf|zf)_[a-z0-9_]+.*"))
+        // VoxSherpa Supertonic F/M voice IDs and named Kokoro speakers.
+        if (id.matches(".*supertonic.*f[1-9].*")
+                || id.matches(".*(^|[^a-z])(af|bf|hf|ef|ff|if|pf|jf|zf)_[a-z0-9_]+.*"))
             return "Female";
-        if (id.matches(".*(^|[^a-z])(am|bm|hm|em|fm|im|pm|jm|zm)_[a-z0-9_]+.*"))
+        if (id.matches(".*supertonic.*m[1-9].*")
+                || id.matches(".*(^|[^a-z])(am|bm|hm|em|fm|im|pm|jm|zm)_[a-z0-9_]+.*"))
             return "Male";
         return "";
     }
@@ -116,55 +150,148 @@ final class LocalVoiceEngine {
         String name = id;
         int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf(':'));
         if (slash >= 0 && slash+1 < name.length()) name = name.substring(slash+1);
-        if (name.length()>30) name = name.substring(name.length()-30);
+        if (name.length() > 48) name = name.substring(name.length()-48);
         return (gender.isEmpty() ? "" : gender + " · ") + locale + " · " + name;
     }
     String chosenVoiceLabel() {
         String id = settings.getString(Prefs.VOICE, "");
         for (Voice v : offline) if (v.getName().equals(id)) return displayVoice(v);
-        return offline.isEmpty() ? "No offline voice installed" : "Auto-select best available";
+        return offline.isEmpty() ? "No offline voice available" : "Choose a voice";
     }
     boolean speak(String text) { return speak(text, null); }
-    boolean speak(String text, Runnable onFinish) {
-        if (!ready || tts == null || text == null || text.trim().isEmpty()) return false;
+    boolean speak(String text, Runnable onSuccess) {
+        return speak(text, onSuccess, null);
+    }
+    boolean speak(String text, Runnable onSuccess, Runnable onFailure) {
+        if (!ready || tts == null) {
+            update("Voice engine not ready. Reconnect it from Voice studio.");
+            if (onFailure != null) main.post(onFailure);
+            return false;
+        }
+        if (text == null || text.trim().isEmpty()) {
+            update("No text to speak");
+            if (onFailure != null) main.post(onFailure);
+            return false;
+        }
         Voice chosen = null;
         String id = settings.getString(Prefs.VOICE, "");
-        for (Voice v : offline) if (v.getName().equals(id)) { chosen = v; break; }
+        if (!id.isEmpty()) {
+            for (Voice voice : offline) if (voice.getName().equals(id)) { chosen = voice; break; }
+            if (chosen == null) {
+                update("Selected speaker disappeared. Refresh voice pack and choose again.");
+                if (onFailure != null) main.post(onFailure);
+                return false; // never silently change female to an unrelated voice
+            }
+        }
         if (chosen == null) {
             String desired = settings.getString(Prefs.LANGUAGE, "hi-IN");
-            for (Voice v : offline) {
-                if (v.getLocale().toLanguageTag().equalsIgnoreCase(desired)) { chosen = v; break; }
+            for (Voice v : offline) if (v.getLocale().toLanguageTag().equalsIgnoreCase(desired)) {
+                chosen = v; break;
             }
         }
-        if (chosen == null) {
-            for (Voice v : offline) {
-                if ("hi".equals(v.getLocale().getLanguage())
-                        || ("en".equals(v.getLocale().getLanguage())
-                        && "IN".equals(v.getLocale().getCountry()))) { chosen = v; break; }
-            }
+        if (chosen == null) for (Voice v : offline) if ("hi".equals(v.getLocale().getLanguage())) {
+            chosen = v; break;
         }
         if (chosen == null && !offline.isEmpty()) chosen = offline.get(0);
-        if (chosen == null || tts.setVoice(chosen) == TextToSpeech.ERROR) return false;
-        tts.setPitch(1.0f); // Do not deform natural neural speaker characteristics
+        if (chosen == null) {
+            update("No offline speech voice. Install speaker model in TTS engine.");
+            if (onFailure != null) main.post(onFailure);
+            return false;
+        }
+        final Voice target = chosen;
+        if (tts.setVoice(target) == TextToSpeech.ERROR) {
+            update("Voice refused by engine: " + target.getName());
+            if (onFailure != null) main.post(onFailure);
+            return false;
+        }
+        AudioAttributes attrs = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
+        tts.setAudioAttributes(attrs);
+        tts.setPitch(1.0f);
         tts.setSpeechRate(Math.max(80,Math.min(120,settings.getInt(Prefs.SPEED,100)))/100f);
-        String utterance = UUID.randomUUID().toString();
+
+        final String utterance = UUID.randomUUID().toString();
+        final long epoch = ++playbackEpoch;
+        currentUtterance = utterance;
+        stage = "Queued";
+        update("Voice queued • " + displayVoice(target));
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-            @Override public void onStart(String id) { }
-            @Override public void onDone(String id) {
-                if (id.equals(utterance) && onFinish != null) main.post(onFinish);
+            private void accept(String state) {
+                main.post(() -> {
+                    if (epoch != playbackEpoch || !utterance.equals(currentUtterance)) return;
+                    stage = state;
+                    update(state + " • " + displayVoice(target));
+                });
             }
-            @Override public void onError(String id) {
-                // Surface through user-facing voice preview status, not a silent success.
-                if (id.equals(utterance) && onFinish != null) main.post(onFinish);
+            @Override public void onStart(String id) {
+                if (utterance.equals(id)) accept("Synthesizing / playback starting");
+            }
+            @Override public void onBeginSynthesis(String id,int sampleRate,int format,int channels) {
+                if (utterance.equals(id)) accept("Audio synthesis started (" + sampleRate + " Hz)");
+            }
+            @Override public void onDone(String id) {
+                if (!utterance.equals(id)) return;
+                main.post(() -> {
+                    if (epoch != playbackEpoch || !id.equals(currentUtterance)) return;
+                    stage = "Complete";
+                    update("Speech completed • " + displayVoice(target));
+                    if (onSuccess != null) onSuccess.run();
+                });
+            }
+            @Override public void onError(String id) { onError(id, -1); }
+            @Override public void onError(String id,int errorCode) {
+                if (!utterance.equals(id)) return;
+                main.post(() -> {
+                    if (epoch != playbackEpoch || !id.equals(currentUtterance)) return;
+                    stage = "Failed";
+                    update("TTS synthesis/playback FAILED (code " + errorCode
+                            + "). Test model in VoxSherpa Generate tab.");
+                    if (onFailure != null) onFailure.run();
+                });
+            }
+            @Override public void onStop(String id,boolean interrupted) {
+                if (utterance.equals(id)) accept("Voice stopped" + (interrupted?" (interrupted)":""));
             }
         });
-        return tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,utterance)==TextToSpeech.SUCCESS;
+        int queueResult = tts.speak(text, TextToSpeech.QUEUE_FLUSH,null,utterance);
+        if (queueResult != TextToSpeech.SUCCESS) {
+            update("TTS speech request rejected immediately by the engine");
+            if (onFailure != null) main.post(onFailure);
+            return false;
+        }
+        // A successful queue only means accepted, NOT that audible audio exists.
+        main.postDelayed(() -> {
+            if (epoch != playbackEpoch || !utterance.equals(currentUtterance)) return;
+            if ("Queued".equals(stage)) {
+                update("Voice still queued after 8s. Neural engine/model may be stuck.");
+            } else if ("Synthesizing / playback starting".equals(stage)) {
+                update("Voice is still synthesizing after 8s; audio not confirmed.");
+            }
+        },8000L);
+        main.postDelayed(() -> {
+            if (epoch != playbackEpoch || !utterance.equals(currentUtterance)) return;
+            if (!"Complete".equals(stage) && !"Failed".equals(stage)) {
+                update("Voice has not finished in 25s. Check VoxSherpa Generate directly, then retry.");
+            }
+        },25000L);
+        return true;
     }
-    void stop() { if (tts != null) tts.stop(); }
+    int musicVolume() {
+        AudioManager manager = (AudioManager)context.getSystemService(Context.AUDIO_SERVICE);
+        return manager == null ? -1 : manager.getStreamVolume(AudioManager.STREAM_MUSIC);
+    }
+    void stop() {
+        ++playbackEpoch;
+        currentUtterance = "";
+        if (tts != null) tts.stop();
+    }
     void shutdown() {
         serial++;
+        ++playbackEpoch;
+        currentUtterance = "";
         if (tts != null) { tts.stop(); tts.shutdown(); tts = null; }
-        ready=false;
+        ready = false;
         offline.clear();
     }
 }
