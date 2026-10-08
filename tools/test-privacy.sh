@@ -70,6 +70,18 @@ grep -Fq 'isNetworkConnectionRequired()' "$voices"
 grep -Fq 'new TextToSpeech(context, listener, requested)' "$voices"
 grep -Fq 'prefs.edit().putString(Prefs.TTS_ENGINE' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'VOICE CHARACTER' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'voice.setStatusListener' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'voiceHealthView=text' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'Check offline Hindi understanding' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'checkRecognitionSupport' app/src/main/java/in/textcall/lab/LocalSpeechInput.java
+grep -Fq 'getInstalledOnDeviceLanguages' app/src/main/java/in/textcall/lab/LocalSpeechInput.java
+grep -Fq 'onBeginSynthesis' "$voices"
+grep -Fq 'Speech completed' "$voices"
+grep -Fq 'TTS synthesis/playback FAILED' "$voices"
+grep -Fq 'getCurrentEngine()' "$voices"
+grep -Fq 'HindiLanguage.replyStyle' app/src/main/java/in/textcall/lab/PromptFormatter.java
+grep -Fq 'HindiLanguage.likelyHindi' app/src/main/java/in/textcall/lab/FastReply.java
+grep -Fq 'Supertonic external-app compatibility is unverified' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'genderFilter' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 
 # Live actions are restricted to exact call UI, role attribution and opt-in.
