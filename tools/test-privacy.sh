@@ -28,6 +28,12 @@ grep -Fq 'System.loadLibrary("callcompanion_llm")' app/src/main/java/in/textcall
 grep -Fq 'getContentResolver().openInputStream' app/src/main/java/in/textcall/lab/LocalModel.java
 grep -Fq 'private static native String nativeGenerate' app/src/main/java/in/textcall/lab/LocalModel.java
 grep -Fq 'llama_model_load_from_file' app/src/main/cpp/callcompanion-llm.cpp
+grep -Fq 'llama_memory_clear(mem,true)' app/src/main/cpp/callcompanion-llm.cpp
+grep -Fq 'MAX_CPU_TIME=std::chrono::seconds(35)' app/src/main/cpp/callcompanion-llm.cpp
+grep -Fq 'nativeProgress' app/src/main/java/in/textcall/lab/LocalModel.java
+grep -Fq 'nativeCancel' app/src/main/java/in/textcall/lab/LocalModel.java
+grep -Fq 'Stop slow AI inference' "$main"
+grep -Fq 'watchInference(epoch)' "$main"
 grep -Fq 'LLAMA_PROCESS_TYPE_DECODE' app/src/main/cpp/callcompanion-llm.cpp
 grep -Fq 'Prefs.USE_LLM, false' "$service"
 grep -Fq 'epoch != generationEpoch' "$service"
