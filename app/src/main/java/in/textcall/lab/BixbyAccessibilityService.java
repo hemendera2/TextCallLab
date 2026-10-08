@@ -222,7 +222,10 @@ public final class BixbyAccessibilityService extends AccessibilityService {
             s.textCallConfirm = n;
         }
         if (l.equals("incoming call") || l.equals("answer call") || l.equals("decline call")
-                || l.contains("incoming call")) s.incomingScreen = true;
+                || l.equals("answer") || l.equals("decline") || l.equals("reject")
+                || l.contains("incoming call") || l.contains("swipe to answer")) {
+            s.incomingScreen = true;
+        }
         if (l.contains("end call") || l.contains("switch to voice call")
                 || l.contains("voice call")) s.inCall = true;
         if (n.isEditable() && n.isVisibleToUser()) {
