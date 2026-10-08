@@ -1,4 +1,35 @@
-# CallCompanion — Samsung A52s native voice laboratory
+# CallCompanion — v0.5 private voice lab (Samsung A52s 5G)
+
+**Current release is a private on-device voice conversation prototype — NOT an autonomous SIM-call agent.**
+
+## What's NEW in v0.5
+- Native **Talk** tab: tap to speak, optional user-started turn-taking, and typed fallback.
+- Mic capture is explicitly permission-gated and active **only while the app stays in the foreground**.
+- Uses `SpeechRecognizer.createOnDeviceSpeechRecognizer` (Android 12+) and refuses to silently fall back to a cloud recognizer if no on-device service/language is available.
+- Stateless network architecture: the APK has **NO `INTERNET` permission**; typed and speech turns are not uploaded by our app.
+- Offline TTS reply through Android TextToSpeech with a chosen installed offline voice. Hands-free demo listens, responds, speaks, then starts another turn after TTS completes.
+- `ConversationEngine`: a **simple rules-based** multi-turn responder with topic carryover, owner-provided public facts and up to 6 recent exchanges kept **in RAM only**. It varies replies by topic/turn but is **not an LLM** and cannot follow arbitrary natural-language instructions reliably.
+- `Privacy` screen: owner/public-facts fields, editable experimental guidance, clear/reset controls. Do **not** put private information or secrets there.
+- App still has no ability to capture protected cellular caller audio, inject synthesized voice into a carrier call, answer the call, or autonomously converse with that caller.
+- The optional Samsung accessibility overlay remains an **inert preference shortcut**, not a live call AI feature.
+
+### What about an offline LLM or Gemini?
+An optional on-device small LLM (`llama.cpp` + Qwen tiny models) may improve response quality on phones with enough RAM, but it is NOT bundled or evaluated for latency in v0.5. Gemini free-tier calls require Internet, usage limits and disclosure of call content to a third party, so cloud upload is NOT integrated under the current privacy requirement. **The real cellular bridge must be independently proven before connecting a full AI to live calls.**
+
+### Privacy change since v0.4
+Version 0.4 declared no microphone access. v0.5 **adds `RECORD_AUDIO`** for opt-in local voice recognition. Android prompts the user on first voice use. No microphone foreground service, no contact/SMS/call-log permissions, no backups, no networking. Microphone is stopped when the app is paused or you leave Talk. Keep Samsung accessibility OFF unless deliberately running a test. Android's installed TTS service and Samsung's proprietary Text Call service have separate privacy practices, which this APK cannot override.
+
+### Phone-only APK install
+Get the latest successful build from **Actions → Build Android APK** in this repository. With Termux already authorized:
+```bash
+gh run list -R hemendera2/TextCallLab --limit 3
+mkdir -p ~/storage/downloads/CallCompanionV05
+gh run download RUN_ID -R hemendera2/TextCallLab -n TextCallLab-debug-apk -D ~/storage/downloads/CallCompanionV05
+```
+Use the actual successful `RUN_ID`. Install `Downloads/CallCompanionV05/app-debug.apk`. If the previous debug signing key differs, uninstall the old APK first (erases local settings). Once installed, Termux does not need to run. On devices missing on-device recognition, use the typed test and check Android language model availability—no cloud substitution.
+
+## Existing v0.4 notes and technical background
+
 
 **Current build: v0.4.** A modern native Android UI, a local offline voice catalog/preview and an experimental Samsung call-screen shortcut. **This is not yet an autonomous AI call attendant.** Normal cellular call audio is not available for generic third-party Android apps, and Samsung Bixby Text Call automation has **not** been validated end-to-end on this A52s.
 
