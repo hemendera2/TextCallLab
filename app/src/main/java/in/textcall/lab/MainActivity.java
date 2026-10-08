@@ -1,256 +1,547 @@
 package in.textcall.lab;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.Shader;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
-import java.util.Locale;
-import java.util.Set;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
-import android.widget.CheckBox;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.SeekBar;
+import android.widget.AdapterView;
+import java.util.List;
+import java.util.Locale;
 
+/** Local-first native shell: no analytics, no networking and no privileged call control. */
 public final class MainActivity extends Activity {
+    private static final int BACK = Color.rgb(245, 248, 253);
+    private static final int NAVY = Color.rgb(17, 31, 58);
+    private static final int SUB = Color.rgb(91, 105, 127);
+    private static final int BLUE = Color.rgb(37, 93, 238);
+    private static final int BORDER = Color.rgb(224, 232, 244);
+    private final String[] tabs = {"Home", "Voice studio", "Privacy"};
     private SharedPreferences p;
-    private CheckBox enabled;
-    private CheckBox autoSend;
-    private EditText owner;
-    private EditText instructions;
-    private EditText callerId;
-    private EditText sendId;
-    private EditText testText;
-    private TextView state;
-    private TextView diagnostics;
-    private TextView testOutput;
-    private TextView voiceStatus;
-    private TextToSpeech speech;
-    private boolean localVoiceReady = false;
+    private LocalVoiceEngine voice;
+    private LinearLayout body;
+    private int currentTab = 0;
+    private String previewReply = "";
+    private boolean voiceInitialized = false;
 
-    @Override public void onCreate(Bundle stateBundle) {
-        super.onCreate(stateBundle);
+    @Override public void onCreate(Bundle saved) {
+        super.onCreate(saved);
+        getWindow().setStatusBarColor(BACK);
+        getWindow().setNavigationBarColor(BACK);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         p = Prefs.get(this);
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        int m = dip(15);
-        content.setPadding(m,m,m,m);
-        scroll.addView(content);
-
-        TextView title = label("TextCall Lab  •  A52s 5G", 24);
-        title.setTextColor(Color.rgb(0, 80, 145));
-        content.addView(title);
-        content.addView(label("₹0 / no account / no API / no internet permission", 14));
-        content.addView(label("VERSION 0.3 — PRIVACY-SAFE OFFLINE VOICE PREVIEW", 15));
-        content.addView(label("PRIVACY: No internet permission, no call audio or contacts permission, no saved caller transcript, no automatic replies. This is a local scripted diagnostic tool, NOT a human-level AI. Voice preview plays on the phone speaker only; it does not enter a SIM call. Samsung One UI access has not been verified on your A52s.", 15));
-
-        Button accessibility = button("1. OPEN ACCESSIBILITY SETTINGS");
-        accessibility.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        content.addView(accessibility);
-
-        enabled = new CheckBox(this);
-        enabled.setText("2. Monitor Samsung Text Call after I manually answer via Bixby");
-        enabled.setChecked(p.getBoolean(Prefs.ENABLED, false));
-        enabled.setOnCheckedChangeListener((button, checked) -> p.edit().putBoolean(Prefs.ENABLED, checked).apply());
-        content.addView(enabled);
-
-        autoSend = new CheckBox(this);
-        autoSend.setText("Automatic sending LOCKED in privacy-safe test build");
-        autoSend.setChecked(false);
-        autoSend.setEnabled(false);
-        content.addView(autoSend);
-
-        content.addView(label("3. OWNER INFORMATION (local only)", 17));
-        owner = input("Owner/business name", p.getString(Prefs.OWNER, "Owner"), false);
-        content.addView(owner);
-        instructions = input("Allowed public info about business (keep concise)", p.getString(Prefs.INSTRUCTIONS, ""), true);
-        content.addView(instructions);
-        content.addView(label("4. ONE UI VIEW IDs (identify from test call diagnostics)", 17));
-        content.addView(label("Leave these blank until diagnosed. This prevents accidental auto-replies.", 13));
-        callerId = input("Caller transcript resource ID", p.getString(Prefs.CALLER_ID, ""), false);
-        content.addView(callerId);
-        sendId = input("Send button resource ID", p.getString(Prefs.SEND_ID, ""), false);
-        content.addView(sendId);
-        Button save = button("SAVE SETTINGS");
-        save.setOnClickListener(v -> {
-            p.edit().putString(Prefs.OWNER, owner.getText().toString().trim())
-                    .putString(Prefs.INSTRUCTIONS, instructions.getText().toString().trim())
-                    .putString(Prefs.CALLER_ID, callerId.getText().toString().trim())
-                    .putString(Prefs.SEND_ID, sendId.getText().toString().trim()).apply();
-            state.setText("Settings saved. Start a trusted test call using Samsung Bixby Text Call.");
-        });
-        content.addView(save);
-
-        content.addView(label("5. OFFLINE REPLY TEST (no phone call needed)", 17));
-        testText = input("Type a caller sentence: Hello, price kya hai?", "Hello, who are you?", false);
-        content.addView(testText);
-        Button reply = button("GENERATE OFFLINE TEST REPLY");
-        reply.setOnClickListener(v -> showReplyPreview());
-        content.addView(reply);
-        testOutput = label("Test response appears here", 16);
-        content.addView(testOutput);
-        voiceStatus = label("Voice preview has not been used. The system must have an installed offline English voice.", 13);
-        content.addView(voiceStatus);
-        Button stopVoice = button("STOP VOICE PREVIEW");
-        stopVoice.setOnClickListener(v -> {
-            if (speech != null) speech.stop();
-            voiceStatus.setText("Voice preview stopped.");
-        });
-        content.addView(stopVoice);
-
-        content.addView(label("6. LIVE PROBE DIAGNOSTICS (phone-local)", 17));
-        state = label("Service status not yet checked", 15);
-        content.addView(state);
-        Button refresh = button("REFRESH DIAGNOSTICS");
-        refresh.setOnClickListener(v -> refresh());
-        content.addView(refresh);
-        Button clear = button("CLEAR LOCAL DIAGNOSTICS + DISABLE AUTO-SEND");
-        clear.setOnClickListener(v -> {
-            p.edit().remove(Prefs.DIAGNOSTICS).remove(Prefs.STATUS)
-                    .putBoolean(Prefs.AUTO_SEND, false).apply();
-            autoSend.setChecked(false);
-            refresh();
-        });
-        content.addView(clear);
-        diagnostics = label("No live Samsung UI capture yet.", 12);
-        diagnostics.setTextIsSelectable(true);
-        content.addView(diagnostics);
-        content.addView(label("PRIVACY: This version stores screen STRUCTURE only (resource IDs, class, booleans). Caller text and reply content are never stored in diagnostics. Do not include private information in owner instructions. No INTERNET permission. Samsung's own Text Call privacy is separate.\n\nTo test with a trusted participant, keep auto-send OFF, open Bixby Text Call on a trusted incoming call, let the caller say one sentence, then come back and tap Refresh. Full end-to-end success depends on whether One UI exposes the transcript and input controls.", 14));
-        setContentView(scroll);
+        voice = new LocalVoiceEngine(this, p);
+        render();
+        voice.start(ready -> runOnUiThread(() -> {
+            voiceInitialized = ready;
+            if (!isFinishing()) render();
+        }));
     }
 
     @Override protected void onResume() {
         super.onResume();
-        refresh();
+        if (body != null) render();
     }
 
-    private void showReplyPreview() {
-        // The typed dummy text is processed locally, never stored in diagnostics.
-        final String answer = OfflineResponder.reply(
-                testText.getText().toString(),
-                owner.getText().toString(),
-                instructions.getText().toString());
-        testOutput.setText(answer);
-        if (answer.isEmpty()) {
-            new android.app.AlertDialog.Builder(this).setTitle("No test text")
-                    .setMessage("Type a short dummy sentence and try again.")
-                    .setPositiveButton("OK", null).show();
-            return;
+    private void render() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BACK);
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(22), dp(20), dp(22), dp(16));
+        TextView logo = text("◉", 28, BLUE, true);
+        header.addView(logo);
+        LinearLayout name = new LinearLayout(this);
+        name.setOrientation(LinearLayout.VERTICAL);
+        name.setPadding(dp(12), 0, 0, 0);
+        name.addView(text("CALLCOMPANION", 17, NAVY, true));
+        name.addView(text("PERSONAL VOICE LAB  /  A52s", 10, SUB, true));
+        header.addView(name);
+        root.addView(header);
+
+        ScrollView scroller = new ScrollView(this);
+        scroller.setFillViewport(false);
+        scroller.setClipToPadding(false);
+        body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(20), dp(6), dp(20), dp(22));
+        scroller.addView(body);
+        root.addView(scroller, new LinearLayout.LayoutParams(-1, 0, 1f));
+
+        LinearLayout nav = new LinearLayout(this);
+        nav.setGravity(Gravity.CENTER);
+        nav.setBackgroundColor(Color.WHITE);
+        nav.setPadding(dp(8), dp(10), dp(8), dp(12));
+        for (int i = 0; i < tabs.length; i++) {
+            final int at = i;
+            TextView item = text(tabs[i], 13, i == currentTab ? BLUE : SUB, i == currentTab);
+            item.setGravity(Gravity.CENTER);
+            item.setPadding(dp(7), dp(12), dp(7), dp(12));
+            item.setBackground(round(i == currentTab ? Color.rgb(236, 242, 255) : Color.WHITE, 15, 0));
+            item.setOnClickListener(v -> { currentTab = at; render(); });
+            nav.addView(item, new LinearLayout.LayoutParams(0, -2, 1f));
         }
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Offline scripted reply (NOT a call)")
-                .setMessage(answer + "\n\nTap PLAY VOICE to hear it from this phone's speaker. No microphone is used.")
-                .setPositiveButton("PLAY VOICE", (dialog, which) -> speakLocally(answer))
-                .setNegativeButton("CLOSE", null)
-                .show();
+        root.addView(nav);
+        setContentView(root);
+        if (currentTab == 0) showHome();
+        else if (currentTab == 1) showVoice();
+        else showPrivacy();
     }
 
-    private void speakLocally(String answer) {
-        if (localVoiceReady && speech != null) {
-            playOffline(answer);
-            return;
+    private void showHome() {
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setPadding(dp(20), dp(20), dp(20), dp(22));
+        GradientDrawable gradient = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(17, 33, 70), Color.rgb(34, 62, 125), Color.rgb(39, 91, 151)});
+        gradient.setCornerRadius(dp(26));
+        hero.setBackground(gradient);
+        hero.addView(text("✦  LOCAL-FIRST  ·  NO CLOUD ACCOUNT", 11, Color.rgb(146, 226, 255), true));
+        space(hero, 10);
+        hero.addView(text("Your voice.\nYour rules.", 32, Color.WHITE, true));
+        space(hero, 5);
+        hero.addView(text("A private voice playground and Samsung call-screen research companion.", 13,
+                Color.rgb(216, 231, 254), false));
+        View art = new SignalArt(this);
+        hero.addView(art, new LinearLayout.LayoutParams(-1, dp(140)));
+        body.addView(hero);
+        space(body, 14);
+
+        LinearLayout highlights = horizontal();
+        highlights.addView(pill("₹0 API fees", Color.rgb(232, 239, 255), NAVY),
+                new LinearLayout.LayoutParams(0, -2, 1f));
+        highlights.addView(pill("On-device", Color.rgb(232, 239, 255), NAVY),
+                new LinearLayout.LayoutParams(0, -2, 1f));
+        highlights.addView(pill("No recorder", Color.rgb(232, 239, 255), NAVY),
+                new LinearLayout.LayoutParams(0, -2, 1f));
+        body.addView(highlights);
+        space(body, 16);
+
+        LinearLayout active = card();
+        active.addView(text("CALL-SCREEN CONNECTION", 11, BLUE, true));
+        space(active, 9);
+        active.addView(text("Samsung Text Call bridge", 19, NAVY, true));
+        space(active, 6);
+        boolean enabled = isServiceEnabled();
+        active.addView(text(enabled ? "Accessibility enabled on this device" :
+                "One-time Samsung permission required", 13, enabled ?
+                Color.rgb(23, 125, 97) : SUB, false));
+        space(active, 12);
+        active.addView(text("This app cannot intercept SIM audio or independently speak to a caller. Samsung Bixby Text Call must be started manually.", 12, SUB, false));
+        space(active, 12);
+        active.addView(action(enabled ? "Review phone permissions  ↗" :
+                "Enable Samsung screen access  ↗", BLUE, Color.WHITE, () ->
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
+        space(active, 12);
+        active.addView(toggle("Observe Samsung call UI", Prefs.ENABLED,
+                "Metadata-only diagnostics. No call transcripts are saved."));
+        space(active, 8);
+        active.addView(toggle("Floating call shortcut (experimental)", Prefs.FLOATING,
+                "Shows voice presets on recognized Samsung call screens. It does not answer calls."));
+        body.addView(active);
+        space(body, 16);
+
+        LinearLayout next = card();
+        next.addView(text("VOICE STUDIO", 11, BLUE, true));
+        space(next, 7);
+        next.addView(text("Make the assistant sound right", 18, NAVY, true));
+        space(next, 7);
+        next.addView(text("Choose among installed offline voices, adjust tone and test instant spoken replies.", 13, SUB, false));
+        space(next, 13);
+        next.addView(action("Explore voice options  →", NAVY, Color.WHITE, () -> {
+            currentTab = 1; render();
+        }));
+        body.addView(next);
+        space(body, 16);
+
+        LinearLayout truth = card();
+        truth.addView(text("CAPABILITY STATUS", 11, BLUE, true));
+        space(truth, 8);
+        truth.addView(statusRow("Offline scripted reply", "Available", true));
+        truth.addView(statusRow("Offline speech preview", voiceInitialized ? "Available with installed voice" : "Voice engine unavailable / loading", voiceInitialized));
+        truth.addView(statusRow("SIM-call AI takeover", "Not supported by Android app", false));
+        truth.addView(statusRow("Human-level generative AI", "Not included in this build", false));
+        body.addView(truth);
+    }
+
+    private void showVoice() {
+        body.addView(text("Voice studio", 28, NAVY, true));
+        body.addView(text("Choose language and voice variants installed on your phone. Your preferences are saved locally.", 13, SUB, false));
+        space(body, 17);
+        LinearLayout voiceCard = card();
+        voiceCard.addView(text("VOICE LIBRARY", 11, BLUE, true));
+        space(voiceCard, 10);
+
+        List<Locale> languages = voice.languages();
+        if (!voiceInitialized || languages.isEmpty()) {
+            voiceCard.addView(text("No offline voices detected yet. Install an offline voice pack in Samsung / Android TTS settings, then reopen this app.", 13, SUB, false));
+            space(voiceCard, 12);
+            voiceCard.addView(action("Manage device speech voices  ↗", NAVY, Color.WHITE,
+                    () -> openSpeechSettings()));
+        } else {
+            voiceCard.addView(text(languages.size() + " installed locale variants available · no network-required voices shown.", 12, SUB, false));
+            space(voiceCard, 13);
+            voiceCard.addView(text("LANGUAGE / ACCENT", 11, SUB, true));
+            Spinner selector = new Spinner(this);
+            String[] names = new String[languages.size()];
+            int initially = 0;
+            String savedLang = p.getString(Prefs.LANGUAGE, "");
+            for (int i = 0; i < languages.size(); i++) {
+                Locale l = languages.get(i);
+                names[i] = l.getDisplayName(Locale.ENGLISH);
+                if (l.toLanguageTag().equals(savedLang)) initially = i;
+                if (savedLang.isEmpty() && "en".equals(l.getLanguage()) && "IN".equals(l.getCountry())) initially = i;
+            }
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, names);
+            selector.setAdapter(adapter);
+            voiceCard.addView(selector);
+            LinearLayout available = vertical();
+            voiceCard.addView(available);
+            selector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                    Locale chosen = languages.get(position);
+                    p.edit().putString(Prefs.LANGUAGE, chosen.toLanguageTag()).apply();
+                    populateVoices(available, voice.voicesFor(chosen));
+                }
+                @Override public void onNothingSelected(AdapterView<?> parent) { }
+            });
+            selector.setSelection(initially);
+            populateVoices(available, voice.voicesFor(languages.get(initially)));
+            space(voiceCard, 8);
+            voiceCard.addView(action("Install more device voices  ↗", Color.rgb(232, 239, 255), BLUE,
+                    () -> openSpeechSettings()));
         }
-        if (speech != null) {
-            voiceStatus.setText("Offline speech engine is still initializing. Wait and tap PLAY VOICE again.");
-            return;
+        body.addView(voiceCard);
+        space(body, 14);
+
+        LinearLayout character = card();
+        character.addView(text("VOICE CHARACTER", 11, BLUE, true));
+        space(character, 6);
+        character.addView(text("Deep • Natural • Bright", 20, NAVY, true));
+        character.addView(text("These are pitch presets. Android TTS does not reliably identify voice gender; deep/bright are not guaranteed male/female voices.", 12, SUB, false));
+        space(character, 12);
+        LinearLayout styles = horizontal();
+        for (String style : new String[]{"Deep", "Natural", "Bright"}) {
+            boolean selected = p.getString(Prefs.STYLE, "Natural").equals(style);
+            TextView b = pill(style, selected ? BLUE : Color.rgb(237, 243, 251), selected ? Color.WHITE : NAVY);
+            b.setOnClickListener(v -> { p.edit().putString(Prefs.STYLE, style).apply(); render(); });
+            styles.addView(b, new LinearLayout.LayoutParams(0, -2, 1f));
         }
-        voiceStatus.setText("Checking installed device voices (offline only)...");
-        // Explicit user tap is required before initializing the phone's TTS engine.
-        speech = new TextToSpeech(getApplicationContext(), result ->
-            runOnUiThread(() -> {
-                if (speech == null || result != TextToSpeech.SUCCESS) {
-                    voiceStatus.setText("Text-to-speech engine unavailable. Configure an offline voice in Android Text-to-speech settings.");
-                    return;
-                }
-                Voice chosen = null;
-                Set<Voice> installedVoices = speech.getVoices();
-                if (installedVoices != null) {
-                    for (Voice voice : installedVoices) {
-                        Locale locale = voice.getLocale();
-                        if (locale == null || !"en".equalsIgnoreCase(locale.getLanguage())
-                                || voice.isNetworkConnectionRequired()) continue;
-                        if (chosen == null || "IN".equalsIgnoreCase(locale.getCountry())) {
-                            chosen = voice;
-                            if ("IN".equalsIgnoreCase(locale.getCountry())) break;
-                        }
-                    }
-                }
-                if (chosen == null || speech.setVoice(chosen) == TextToSpeech.ERROR) {
-                    localVoiceReady = false;
-                    voiceStatus.setText("No installed offline English voice found. Download one using the phone's Text-to-speech settings, then reopen this app.");
-                    return;
-                }
-                localVoiceReady = true;
-                playOffline(answer);
-            })
-        );
+        character.addView(styles);
+        space(character, 13);
+        int speed = p.getInt(Prefs.SPEED, 100);
+        TextView speedLabel = text("Speech pace  ·  " + speed + "%", 12, SUB, true);
+        character.addView(speedLabel);
+        SeekBar seek = new SeekBar(this);
+        seek.setMax(50); seek.setProgress(speed - 75);
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar b, int progress, boolean fromUser) {
+                int value = 75 + progress;
+                speedLabel.setText("Speech pace  ·  " + value + "%");
+                if (fromUser) p.edit().putInt(Prefs.SPEED, value).apply();
+            }
+            @Override public void onStartTrackingTouch(SeekBar b) { }
+            @Override public void onStopTrackingTouch(SeekBar b) { }
+        });
+        character.addView(seek);
+        body.addView(character);
+        space(body, 14);
+
+        LinearLayout demo = card();
+        demo.addView(text("LIVE OFFLINE PREVIEW", 11, BLUE, true));
+        space(demo, 6);
+        demo.addView(text("Hear a reply, without making a call", 19, NAVY, true));
+        space(demo, 8);
+        EditText userText = input("Try: Hello, can we schedule a meeting?", "Hello, who are you?", 2);
+        demo.addView(userText);
+        space(demo, 12);
+        TextView result = text(previewReply.isEmpty() ?
+                "This version creates rule-based responses, not generative AI conversations." : previewReply, 14, NAVY, false);
+        demo.addView(result);
+        space(demo, 13);
+        demo.addView(action("Generate & speak locally  ▶", BLUE, Color.WHITE, () -> {
+            previewReply = OfflineResponder.reply(userText.getText().toString(),
+                    p.getString(Prefs.PROFILE_NAME, "Owner"), p.getString(Prefs.PROFILE_INFO, ""));
+            result.setText(previewReply);
+            if (!voice.speak(previewReply))
+                toast("An installed offline voice is required. Choose one above.");
+            else toast("Playing on phone speaker. NOT connected to a call.");
+        }));
+        space(demo, 8);
+        demo.addView(action("Stop playback  ■", Color.rgb(239, 243, 250), NAVY, () -> voice.stop()));
+        body.addView(demo);
     }
 
-    private void playOffline(String answer) {
-        if (speech == null || !localVoiceReady) return;
-        int outcome = speech.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "text-call-lab-local-preview");
-        voiceStatus.setText(outcome == TextToSpeech.SUCCESS
-                ? "Playing through the phone's speaker using an installed offline voice. This is NOT SIM call audio."
-                : "Offline voice playback failed. Check phone media volume and installed speech voices.");
+    private void populateVoices(LinearLayout list, List<Voice> choices) {
+        list.removeAllViews();
+        space(list, 8);
+        list.addView(text("OFFLINE VOICE VARIANTS · " + choices.size(), 11, SUB, true));
+        space(list, 7);
+        for (Voice v : choices) {
+            boolean selected = v.getName().equals(p.getString(Prefs.VOICE, ""));
+            String shortName = v.getName();
+            if (shortName.length() > 48) shortName = shortName.substring(0, 48) + "…";
+            TextView row = action((selected ? "✓  " : "◯  ") + shortName,
+                    selected ? Color.rgb(229, 237, 255) : Color.rgb(247, 249, 253),
+                    selected ? BLUE : NAVY, () -> {
+                        p.edit().putString(Prefs.VOICE, v.getName())
+                                .putString(Prefs.LANGUAGE, v.getLocale().toLanguageTag()).apply();
+                        populateVoices(list, choices);
+                    });
+            list.addView(row);
+            space(list, 6);
+        }
     }
 
+    private void showPrivacy() {
+        body.addView(text("Private by design", 28, NAVY, true));
+        body.addView(text("Permissions, local storage and call behavior are always visible and under your control.", 13, SUB, false));
+        space(body, 16);
+
+        LinearLayout status = card();
+        status.addView(text("SECURITY POSTURE", 11, BLUE, true));
+        space(status, 10);
+        status.addView(statusRow("No internet permission", "Enforced in manifest", true));
+        status.addView(statusRow("No microphone / recording", "Enforced in manifest", true));
+        status.addView(statusRow("No contacts / SMS / call history", "Enforced in manifest", true));
+        status.addView(statusRow("Samsung-only screen probe", "Opt-in, metadata only", true));
+        status.addView(statusRow("Automatically send caller messages", "Permanently disabled", true));
+        status.addView(statusRow("Samsung Text Call processing", "Separate Samsung service", false));
+        body.addView(status);
+        space(body, 14);
+
+        LinearLayout profile = card();
+        profile.addView(text("LOCAL IDENTITY", 11, BLUE, true));
+        space(profile, 8);
+        profile.addView(text("Assistant profile", 19, NAVY, true));
+        profile.addView(text("Only enter information you are comfortable sharing in a public call. Never enter passwords, OTPs, payment details or secrets.", 12, SUB, false));
+        space(profile, 10);
+        EditText name = input("Display name", p.getString(Prefs.PROFILE_NAME, "Boss"), 1);
+        profile.addView(name);
+        space(profile, 8);
+        EditText info = input("Public facts / business details (optional)", p.getString(Prefs.PROFILE_INFO, ""), 3);
+        profile.addView(info);
+        space(profile, 10);
+        profile.addView(action("Save profile on this device", BLUE, Color.WHITE, () -> {
+            p.edit().putString(Prefs.PROFILE_NAME, name.getText().toString().trim())
+                    .putString(Prefs.PROFILE_INFO, info.getText().toString().trim()).apply();
+            toast("Local profile saved.");
+        }));
+        body.addView(profile);
+        space(body, 14);
+
+        LinearLayout control = card();
+        control.addView(text("DEVICE CONTROL", 11, BLUE, true));
+        space(control, 9);
+        control.addView(statusRow("Accessibility service", isServiceEnabled() ? "Enabled" : "Disabled", isServiceEnabled()));
+        space(control, 10);
+        control.addView(action("Review protected Android permissions  ↗", Color.rgb(239, 243, 250), NAVY, () ->
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
+        space(control, 8);
+        control.addView(action("Clear local diagnostics now", Color.rgb(239, 243, 250), NAVY, () -> {
+            p.edit().remove(Prefs.DIAGNOSTICS).remove(Prefs.STATUS).apply();
+            toast("Diagnostics cleared.");
+        }));
+        space(control, 8);
+        control.addView(action("Reset all app settings and profile", Color.rgb(255, 237, 235),
+                Color.rgb(161, 42, 42), () -> new AlertDialog.Builder(this)
+                        .setTitle("Delete local app settings?")
+                        .setMessage("Clear the local profile, voice selection and diagnostic metadata, and turn off monitoring. Android's accessibility permission must be disabled separately if enabled.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Delete", (dialog, which) -> {
+                            voice.stop();
+                            p.edit().clear().commit();
+                            p = Prefs.get(this);
+                            previewReply = "";
+                            render();
+                            toast("Local settings reset. Disable Accessibility separately.");
+                        }).show()));
+        body.addView(control);
+        space(body, 14);
+        body.addView(text("IMPORTANT: Neither this screen nor a GitHub build proves zero security risk. Samsung's Text Call service and any installed speech engine have their own terms. Voice preview does not connect to a real SIM caller.", 12, SUB, false));
+    }
+
+    private LinearLayout card() {
+        LinearLayout layout = vertical();
+        layout.setPadding(dp(17), dp(17), dp(17), dp(17));
+        layout.setBackground(round(Color.WHITE, 22, BORDER));
+        return layout;
+    }
+    private TextView statusRow(String title, String value, boolean positive) {
+        TextView v = text((positive ? "✓  " : "•  ") + title + "\n    " + value, 13,
+                positive ? NAVY : SUB, false);
+        v.setPadding(0, dp(5), 0, dp(7));
+        return v;
+    }
+    private TextView toggle(String title, String key, String desc) {
+        // Opening an in-app confirmation is deliberate: sensitive monitoring is never enabled implicitly.
+        boolean enabled = p.getBoolean(key, false);
+        TextView control = text((enabled ? "☑  " : "☐  ") + title + "\n    " + desc, 13, NAVY, enabled);
+        control.setPadding(dp(12), dp(12), dp(12), dp(12));
+        control.setBackground(round(Color.rgb(242, 246, 253), 13, 0));
+        control.setOnClickListener(v -> {
+            boolean next = !p.getBoolean(key, false);
+            if (!next) {
+                p.edit().putBoolean(key, false).apply();
+                render();
+                return;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle("Enable Samsung UI monitoring?")
+                    .setMessage("The service may inspect Samsung's call screen accessibility structure only. It does not record speech, save transcripts, answer or send messages. You can turn it off at any time.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Enable", (d, w) -> {
+                        p.edit().putBoolean(key, true).apply();
+                        render();
+                    }).show();
+        });
+        return control;
+    }
+    private LinearLayout horizontal() {
+        LinearLayout v = new LinearLayout(this);
+        v.setOrientation(LinearLayout.HORIZONTAL);
+        v.setGravity(Gravity.CENTER_VERTICAL);
+        return v;
+    }
+    private LinearLayout vertical() {
+        LinearLayout v = new LinearLayout(this);
+        v.setOrientation(LinearLayout.VERTICAL);
+        return v;
+    }
+    private TextView pill(String s, int color, int textColor) {
+        TextView v = text(s, 11, textColor, true);
+        v.setGravity(Gravity.CENTER);
+        v.setPadding(dp(7), dp(12), dp(7), dp(12));
+        v.setBackground(round(color, 13, 0));
+        return v;
+    }
+    private TextView action(String s, int bg, int fg, Runnable onTap) {
+        TextView v = text(s, 13, fg, true);
+        v.setGravity(Gravity.CENTER);
+        v.setPadding(dp(11), dp(14), dp(11), dp(14));
+        v.setMinHeight(dp(48));
+        v.setBackground(round(bg, 13, 0));
+        v.setClickable(true);
+        v.setFocusable(true);
+        v.setOnClickListener(view -> onTap.run());
+        return v;
+    }
+    private GradientDrawable round(int color, int radius, int stroke) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(radius));
+        if (stroke != 0) d.setStroke(dp(1), stroke);
+        return d;
+    }
+    private TextView text(String s, int size, int color, boolean bold) {
+        TextView v = new TextView(this);
+        v.setText(s);
+        v.setTextSize(size);
+        v.setTextColor(color);
+        v.setLineSpacing(dp(2), 1.0f);
+        v.setTypeface(Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL));
+        return v;
+    }
+    private EditText input(String hint, String value, int minLines) {
+        EditText e = new EditText(this);
+        e.setTextSize(14);
+        e.setTextColor(NAVY);
+        e.setHintTextColor(SUB);
+        e.setHint(hint);
+        e.setMinLines(minLines);
+        e.setSingleLine(minLines == 1);
+        e.setText(value);
+        e.setPadding(dp(12), dp(10), dp(12), dp(10));
+        e.setBackground(round(Color.rgb(246, 249, 254), 13, BORDER));
+        return e;
+    }
+    private void space(LinearLayout v, int h) {
+        View filler = new View(this);
+        v.addView(filler, new LinearLayout.LayoutParams(1, dp(h)));
+    }
+    private boolean isServiceEnabled() {
+        String enabled = Settings.Secure.getString(getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return enabled != null && enabled.contains(getPackageName()
+                + "/" + BixbyAccessibilityService.class.getName());
+    }
+    private void openSpeechSettings() {
+        try {
+            startActivity(new Intent("com.android.settings.TTS_SETTINGS"));
+        } catch (Exception e) {
+            try { startActivity(new Intent(Settings.ACTION_SETTINGS)); }
+            catch (Exception ignored) { toast("Open Settings → General management → Text-to-speech."); }
+        }
+    }
+    private void toast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+    private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + .5f); }
     @Override protected void onDestroy() {
-        if (speech != null) {
-            speech.stop();
-            speech.shutdown();
-            speech = null;
-        }
+        if (voice != null) voice.shutdown();
         super.onDestroy();
     }
 
-    private void refresh() {
-        if (p == null || state == null || diagnostics == null) return;
-        String previous = p.getString(Prefs.STATUS, "Waiting for Bixby Text Call.");
-        state.setText("Service permission: " + (isServiceEnabled() ? "ENABLED" : "NOT ENABLED")
-                + "\n" + previous);
-        diagnostics.setText(p.getString(Prefs.DIAGNOSTICS,
-                "No data yet. Try a trusted call with monitoring ON and auto-send OFF."));
-    }
-
-    private boolean isServiceEnabled() {
-        String all = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        return all != null && all.contains(getPackageName() + "/" + BixbyAccessibilityService.class.getName());
-    }
-
-    private TextView label(String text, int sp) {
-        TextView t = new TextView(this);
-        t.setText(text);
-        t.setTextSize(sp);
-        t.setTextColor(Color.rgb(36, 40, 50));
-        t.setPadding(0, dip(8), 0, dip(8));
-        return t;
-    }
-    private EditText input(String hint, String value, boolean multiline) {
-        EditText e = new EditText(this);
-        e.setHint(hint);
-        e.setText(value);
-        e.setTextSize(15);
-        if (multiline) {
-            e.setMinLines(2);
-            e.setGravity(Gravity.TOP);
-        } else e.setSingleLine(true);
-        return e;
-    }
-    private Button button(String name) {
-        Button b = new Button(this);
-        b.setText(name);
-        b.setAllCaps(false);
-        return b;
-    }
-    private int dip(int n) {
-        return (int) (n * getResources().getDisplayMetrics().density + 0.5f);
+    /** Purely decorative in-app hero graphic drawn locally (no image downloads). */
+    static final class SignalArt extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        SignalArt(Activity activity) { super(activity); }
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float w = getWidth(), h = getHeight();
+            if (w == 0 || h == 0) return;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2.6f * getResources().getDisplayMetrics().density);
+            paint.setColor(Color.argb(100, 130, 220, 255));
+            float cx = w * .68f, cy = h * .53f;
+            for (int i = 0; i < 4; i++) {
+                float r = h * (.17f + i * .14f);
+                paint.setAlpha(140 - i * 26);
+                canvas.drawCircle(cx, cy, r, paint);
+            }
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(255);
+            paint.setShader(new LinearGradient(cx - 55, cy - 60, cx + 50, cy + 65,
+                    Color.rgb(132, 237, 245), Color.rgb(70, 126, 253), Shader.TileMode.CLAMP));
+            canvas.drawCircle(cx, cy, h * .19f, paint);
+            paint.setShader(null);
+            paint.setColor(Color.WHITE);
+            paint.setStrokeWidth(5f);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStyle(Paint.Style.STROKE);
+            canvas.drawArc(cx - h * .075f, cy - h * .08f, cx + h * .075f, cy + h * .08f,
+                    20, 140, false, paint);
+            paint.setStyle(Paint.Style.FILL);
+            for (int i = 0; i < 19; i++) {
+                float x = w * .06f + i * w * .039f;
+                float wave = (float) Math.sin(i * .89f);
+                float bar = (8 + Math.abs(wave) * 30) * getResources().getDisplayMetrics().density / 3f;
+                paint.setColor(Color.argb(170, 194, 244, 255));
+                canvas.drawRoundRect(x, cy - bar, x + 3, cy + bar, 3, 3, paint);
+            }
+        }
     }
 }
