@@ -223,8 +223,16 @@ public final class MainActivity extends Activity {
             selector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                 @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                     Locale chosen = languages.get(position);
-                    p.edit().putString(Prefs.LANGUAGE, chosen.toLanguageTag()).apply();
-                    populateVoices(available, voice.voicesFor(chosen));
+                    List<Voice> availableVoices = voice.voicesFor(chosen);
+                    String currentVoice = p.getString(Prefs.VOICE, "");
+                    boolean matches = false;
+                    for (Voice candidate : availableVoices) {
+                        if (candidate.getName().equals(currentVoice)) { matches = true; break; }
+                    }
+                    SharedPreferences.Editor editor = p.edit().putString(Prefs.LANGUAGE, chosen.toLanguageTag());
+                    if (!matches && !availableVoices.isEmpty()) editor.putString(Prefs.VOICE, availableVoices.get(0).getName());
+                    editor.apply();
+                    populateVoices(available, availableVoices);
                 }
                 @Override public void onNothingSelected(AdapterView<?> parent) { }
             });
@@ -244,10 +252,19 @@ public final class MainActivity extends Activity {
         character.addView(text("These are pitch presets. Android TTS does not reliably identify voice gender; deep/bright are not guaranteed male/female voices.", 12, SUB, false));
         space(character, 12);
         LinearLayout styles = horizontal();
+        final java.util.List<TextView> styleButtons = new java.util.ArrayList<>();
         for (String style : new String[]{"Deep", "Natural", "Bright"}) {
             boolean selected = p.getString(Prefs.STYLE, "Natural").equals(style);
             TextView b = pill(style, selected ? BLUE : Color.rgb(237, 243, 251), selected ? Color.WHITE : NAVY);
-            b.setOnClickListener(v -> { p.edit().putString(Prefs.STYLE, style).apply(); render(); });
+            b.setOnClickListener(v -> {
+                p.edit().putString(Prefs.STYLE, style).apply();
+                for (TextView chip : styleButtons) {
+                    boolean active = chip.getText().toString().equals(style);
+                    chip.setBackground(round(active ? BLUE : Color.rgb(237, 243, 251), 13, 0));
+                    chip.setTextColor(active ? Color.WHITE : NAVY);
+                }
+            });
+            styleButtons.add(b);
             styles.addView(b, new LinearLayout.LayoutParams(0, -2, 1f));
         }
         character.addView(styles);
