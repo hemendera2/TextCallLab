@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.speech.RecognitionListener;
+import android.speech.RecognitionSupport;
+import android.speech.RecognitionSupportCallback;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import java.util.ArrayList;
@@ -30,6 +32,55 @@ final class LocalSpeechInput {
         return Build.VERSION.SDK_INT >= 31
                 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context);
     }
+    interface LanguageCheck { void done(String message, boolean installed); }
+    /** Real OS language-pack capability check; no audio recording or cloud fallback. */
+    void checkHindi(LanguageCheck result) {
+        if (!isSupported()) {
+            result.done("No on-device speech recognizer registered on this phone.", false);
+            return;
+        }
+        if (Build.VERSION.SDK_INT < 33) {
+            result.done("On-device recognizer exists. Installed Hindi pack cannot be checked by this Android version.", false);
+            return;
+        }
+        final SpeechRecognizer probe;
+        try {
+            probe = SpeechRecognizer.createOnDeviceSpeechRecognizer(context);
+            Intent request = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            request.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN");
+            request.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
+            probe.checkRecognitionSupport(request, context.getMainExecutor(),
+                new RecognitionSupportCallback() {
+                    private void close() {
+                        try { probe.destroy(); } catch (Exception ignored) { }
+                    }
+                    @Override public void onSupportResult(RecognitionSupport support) {
+                        boolean installed = false;
+                        for (String tag : support.getInstalledOnDeviceLanguages()) {
+                            if (tag.equalsIgnoreCase("hi-IN") || tag.equalsIgnoreCase("hi")
+                                    || tag.toLowerCase(java.util.Locale.ROOT).startsWith("hi-")) {
+                                installed = true; break;
+                            }
+                        }
+                        String message = installed ? "Offline Hindi recognition pack is installed. Test real Hindi audio next."
+                                : support.getSupportedOnDeviceLanguages().isEmpty()
+                                  ? "Hindi not listed as installed; on-device recognizer may not support this language."
+                                  : "Hindi pack not installed; check Android offline speech language downloads.";
+                        close();
+                        result.done(message, installed);
+                    }
+                    @Override public void onError(int error) {
+                        close();
+                        result.done("Hindi recognition support query unavailable (error "+error+"). Try microphone test.", false);
+                    }
+                });
+        } catch (Exception e) {
+            result.done("Could not check offline Hindi recognizer: " + e.getClass().getSimpleName(), false);
+        }
+    }
+
     void listen(String language, Callback callback) {
         if (listening) return;
         if (!isSupported()) {
