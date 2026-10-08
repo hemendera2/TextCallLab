@@ -42,8 +42,8 @@ public final class MainActivity extends Activity {
         title.setTextColor(Color.rgb(0, 80, 145));
         content.addView(title);
         content.addView(label("₹0 / no account / no API / no internet permission", 14));
-        content.addView(label("VERSION 0.1 — EXPERIMENTAL SCREEN PROBE", 15));
-        content.addView(label("This is a LOCAL scripted responder, NOT a human-level AI model. Samsung One UI access is NOT yet verified on your A52s.", 15));
+        content.addView(label("VERSION 0.2 — PRIVACY SAFE SCREEN PROBE", 15));
+        content.addView(label("PRIVACY: No internet permission, no call audio or contacts permission, no saved caller transcript, no automatic replies. This is a local diagnostic tool, NOT a human-level AI. Samsung One UI access has not been verified on your A52s.", 15));
 
         Button accessibility = button("1. OPEN ACCESSIBILITY SETTINGS");
         accessibility.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
@@ -56,17 +56,9 @@ public final class MainActivity extends Activity {
         content.addView(enabled);
 
         autoSend = new CheckBox(this);
-        autoSend.setText("DANGER: automatically SEND real replies (OFF by default)");
-        autoSend.setChecked(p.getBoolean(Prefs.AUTO_SEND, false));
-        autoSend.setOnCheckedChangeListener((button, checked) -> {
-            if (!checked) p.edit().putBoolean(Prefs.AUTO_SEND, false).apply();
-            else new android.app.AlertDialog.Builder(this)
-                    .setTitle("Confirm live auto-sending")
-                    .setMessage("Only enable after confirming the caller text ID and SEND ID on a trusted test call. Wrong IDs could send replies to the wrong messages. Never use on a real customer call until tested. Continue?")
-                    .setPositiveButton("I tested it", (dialog, which) -> p.edit().putBoolean(Prefs.AUTO_SEND, true).apply())
-                    .setNegativeButton("Not yet", (dialog, which) -> autoSend.setChecked(false))
-                    .show();
-        });
+        autoSend.setText("Automatic sending LOCKED in privacy-safe test build");
+        autoSend.setChecked(false);
+        autoSend.setEnabled(false);
         content.addView(autoSend);
 
         content.addView(label("3. OWNER INFORMATION (local only)", 17));
@@ -117,7 +109,7 @@ public final class MainActivity extends Activity {
         diagnostics = label("No live Samsung UI capture yet.", 12);
         diagnostics.setTextIsSelectable(true);
         content.addView(diagnostics);
-        content.addView(label("PRIVACY: These logs may contain callers' private text. Do not upload or share unredacted logs. This app never uses the internet.\n\nTo test, keep auto-send OFF, open Bixby Text Call on a trusted incoming call, let the caller say one sentence, then come back and tap Refresh. Full end-to-end success depends on whether One UI exposes the transcript and input controls.", 14));
+        content.addView(label("PRIVACY: This version stores screen STRUCTURE only (resource IDs, class, booleans). Caller text and reply content are never stored in diagnostics. Do not include private information in owner instructions. No INTERNET permission. Samsung's own Text Call privacy is separate.\n\nTo test with a trusted participant, keep auto-send OFF, open Bixby Text Call on a trusted incoming call, let the caller say one sentence, then come back and tap Refresh. Full end-to-end success depends on whether One UI exposes the transcript and input controls.", 14));
         setContentView(scroll);
     }
 
