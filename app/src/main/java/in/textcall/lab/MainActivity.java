@@ -189,8 +189,8 @@ public final class MainActivity extends Activity {
         active.addView(toggle("Use OFFLINE Qwen instead of scripts on calls", Prefs.USE_LLM,
                 "Requires imported GGUF. AI runs on phone CPU. Reply may take much longer than fixed rules; OFF by default."));
         space(active, 8);
-        active.addView(toggle("Save encrypted category-only call brief", Prefs.SAVE_BRIEF,
-                "Store topic and next action; no caller name/number or raw transcript."));
+        active.addView(toggle("Save encrypted secretary brief", Prefs.SAVE_BRIEF,
+                "Stores topic/next action. With offline Qwen, may include sensitive AI-derived details. Raw transcript and audio are not stored."));
         space(active, 12);
         active.addView(text("IMPORTANT: NOT YET TESTED on this A52s. Unknown Samsung controls fail closed. Test with consenting callers only. Real caller hears Samsung Bixby, not the in-app voice preset.", 12, SUB, false));
         body.addView(active);
@@ -728,7 +728,7 @@ public final class MainActivity extends Activity {
                     : Prefs.LIVE_REPLY.equals(key)
                     ? "Experimental automatic replies: this will SEND locally scripted messages only when caller role and Samsung Send button are both unambiguous. No guarantee on A52s. Avoid sensitive calls."
                     : Prefs.SAVE_BRIEF.equals(key)
-                    ? "Saves an encrypted category and next action using Android Keystore. No raw transcript, caller name or number is saved."
+                    ? "Stores encrypted topic, actions and (if Qwen is loaded) AI-generated summary. A derived summary may contain private details. No raw audio or transcript is stored by this app. Erase anytime."
                     : "Sensitive Samsung screen access. The Android accessibility service must be enabled separately. No cloud connection.";
             new AlertDialog.Builder(this)
                     .setTitle("Confirm experimental permission")
