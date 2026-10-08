@@ -186,6 +186,9 @@ public final class MainActivity extends Activity {
         active.addView(toggle("Auto-reply to confirmed caller text", Prefs.LIVE_REPLY,
                 "Experimental: role-labeled caller bubble and exact Send control required."));
         space(active, 8);
+        active.addView(toggle("Use OFFLINE Qwen instead of scripts on calls", Prefs.USE_LLM,
+                "Requires imported GGUF. AI runs on phone CPU. Reply may take much longer than fixed rules; OFF by default."));
+        space(active, 8);
         active.addView(toggle("Save encrypted category-only call brief", Prefs.SAVE_BRIEF,
                 "Store topic and next action; no caller name/number or raw transcript."));
         space(active, 12);
@@ -718,7 +721,9 @@ public final class MainActivity extends Activity {
                 render();
                 return;
             }
-            String warning = Prefs.AUTO_ATTEND.equals(key)
+            String warning = Prefs.USE_LLM.equals(key)
+                    ? "Experimental: process caller text through your imported Qwen GGUF entirely on-device; no external API. Model quality and speed on A52s unmeasured, and Samsung Bixby bridge still unverified. Only use for consenting dummy calls."
+                    : Prefs.AUTO_ATTEND.equals(key)
                     ? "Experimental: this may answer all incoming calls using Bixby if Samsung's EXACT controls are exposed. Your A52s is not validated. Test only with someone you trust."
                     : Prefs.LIVE_REPLY.equals(key)
                     ? "Experimental automatic replies: this will SEND locally scripted messages only when caller role and Samsung Send button are both unambiguous. No guarantee on A52s. Avoid sensitive calls."
