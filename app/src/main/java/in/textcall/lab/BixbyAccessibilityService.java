@@ -269,7 +269,7 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         if (sent) {
             lastSentFingerprint = fingerprint(answer);
             replies++;
-            lastReplySentAt = now;
+            lastReplySentAt = SystemClock.elapsedRealtime();
             Prefs.status(this, "Samsung reply click attempted (" + replies + ")", "Topic: " + intent
                     + ". Verify that the caller actually heard the voice.");
         } else {
