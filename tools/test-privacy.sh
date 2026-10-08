@@ -42,7 +42,7 @@ grep -Fq 'compileSdk 35' app/build.gradle
 grep -Fq "abiFilters 'arm64-v8a'" app/build.gradle
 grep -Fq 'TYPE_ACCESSIBILITY_OVERLAY' "$service"
 grep -Fq 'No call transcripts are saved' "$main"
-grep -Fq 'v.isNetworkConnectionRequired()' "$voices"
+grep -Fq 'voice.isNetworkConnectionRequired()' "$voices"
 grep -Fq 'voice.speak(previewReply)' "$main"
 grep -Fq 'android.permission.RECORD_AUDIO' "$manifest"
 grep -Fq 'android.speech.RecognitionService' "$manifest"
@@ -55,6 +55,16 @@ grep -Fq 'private final List<String> turns' app/src/main/java/in/textcall/lab/Co
 grep -Fq 'android.intent.action.TTS_SERVICE' "$manifest"
 grep -Fq '.remove(DIAGNOSTICS).remove(STATUS)' "$prefs"
 grep -Fq 'android:icon="@drawable/app_mark"' "$manifest"
+grep -Fq 'android:name=".SecretaryActivity"' "$manifest"
+grep -Fq 'android:label="KALLVO"' "$manifest"
+grep -Fq 'private final String[] names={"Home","Talk","Settings"}' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'String gender = gender(voice);' "$voices"
+grep -Fq 'KEY_FEATURE_NOT_INSTALLED' "$voices"
+grep -Fq 'isNetworkConnectionRequired()' "$voices"
+grep -Fq 'new TextToSpeech(context, listener, requested)' "$voices"
+grep -Fq 'prefs.edit().putString(Prefs.TTS_ENGINE' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'VOICE CHARACTER' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'genderFilter' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 
 # Live actions are restricted to exact call UI, role attribution and opt-in.
 if grep -Eq 'SharedPreferences\\.Editor.*caller|Log\\.[a-z]+\\(.*caller' "$service"; then
