@@ -1,8 +1,8 @@
-# CallCompanion v0.6 — Samsung Text Call bridge experiment
+# CallCompanion v0.7 — Samsung Text Call bridge experiment
 
 **Build status:** GitHub CI validates Java logic and APK compilation. **On-device incoming Jio call automation remains unverified on Samsung A52s 5G.** Do not claim that installation alone gives a working autonomous AI secretary.
 
-## What is implemented
+Version 0.7 also checks the underlying Samsung window when an accessibility overlay is visible, and provides a manual Try AI Attend shortcut when the incoming label is not exposed. All call-control features remain OFF by default and unverified on the A52s.\n\n## What is implemented
 - One Android app, no PC or Termux needed after installation, no subscription and no API charges.
 - Offline **Talk** mode: opt-in microphone -> strictly on-device Android SpeechRecognizer -> context-aware scripted response -> installed offline Android TTS speaker.
 - A52s Samsung in-call Accessibility only: experimental **Try AI Attend (Bixby)** overlay and opt-in **Automatically try Samsung Text Call**. Uses Samsung exact UI ID `ai_call_floating_button_container` and an accessible Text Call answer confirmation. Does not use generic tap coordinates, dialer replacement or root.
