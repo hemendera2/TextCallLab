@@ -326,7 +326,7 @@ public final class SecretaryActivity extends Activity {
     private void showTalk() {
         section(frame,"TALK TO KALLVO","A conversation, not a script.");
         pad(frame,7);
-        caption(frame,"Hindi-first offline practice. No SIM call is placed.");
+        caption(frame,"Hindi + Hinglish first. Voice understanding requires a local Hindi speech pack. No SIM call is placed.");
         pad(frame,16);
 
         if(!LocalModel.get().isLoaded()) {
@@ -498,6 +498,16 @@ public final class SecretaryActivity extends Activity {
         engine.addView(press("Change installed engine",false,()->enginePicker()));
         pad(engine,10);
         engine.addView(press("Manage offline voice packs   ↗",false,this::speechSettings));
+        pad(engine,10);
+        engine.addView(press("Check offline Hindi understanding",false,()->{
+            voiceHealthView.setText("Checking installed Hindi speech recognizer…");
+            speech.checkHindi((message,installed)->runOnUiThread(()->{
+                if ("voice".equals(detail) && voiceHealthView != null) {
+                    voiceHealthView.setText(message);
+                }
+                Toast.makeText(this,message,Toast.LENGTH_LONG).show();
+            }));
+        }));
         gapCard(frame,engine);
 
         LinearLayout identity=card();
