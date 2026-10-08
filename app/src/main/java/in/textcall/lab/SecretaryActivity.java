@@ -464,7 +464,7 @@ public final class SecretaryActivity extends Activity {
         LinearLayout engine=card();
         engine.addView(text("Speech engine",16,INK,true));
         pad(engine,5);
-        caption(engine,"For natural voice, select an installed neural TTS engine.");
+        caption(engine,"For natural voice, select an installed neural TTS engine. This voice is for in-app conversations; Samsung Bixby controls the voice heard on a SIM call.");
         pad(engine,13);
         TextView chosen=text(voice.activeEngine().isEmpty()
                 ? "System speech engine" : voice.activeEngine(),12,SOFT,false);
@@ -605,7 +605,7 @@ public final class SecretaryActivity extends Activity {
         LinearLayout status=card();
         status.addView(text("Samsung Bixby Text Call",16,INK,true));
         pad(status,7);
-        caption(status,"Experimental Samsung UI bridge. A52s 5G caller-audio delivery has not passed a real-call test.");
+        caption(status,"Experimental Samsung UI bridge. A52s 5G caller-audio delivery has not passed a real-call test. A remote caller hears Bixby, not your selected KALLVO voice.");
         pad(status,10);
         status.addView(press("Open Android Accessibility",false,()->startActivity(
                 new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
