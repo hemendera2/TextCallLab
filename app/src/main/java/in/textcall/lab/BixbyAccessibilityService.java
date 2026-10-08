@@ -14,6 +14,7 @@ import android.view.Gravity;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -78,10 +79,25 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         inspect(now);
     }
 
+    private AccessibilityNodeInfo samsungRoot() {
+        // The accessibility overlay may be the ACTIVE window; inspect Samsung's
+        // genuine underlying window instead of accidentally reading ourselves.
+        java.util.List<AccessibilityWindowInfo> windows = getWindows();
+        if (windows != null) {
+            for (AccessibilityWindowInfo window : windows) {
+                AccessibilityNodeInfo root = window.getRoot();
+                if (root != null && root.getPackageName() != null
+                        && SAMSUNG.contentEquals(root.getPackageName())) return root;
+            }
+        }
+        AccessibilityNodeInfo active = getRootInActiveWindow();
+        return active != null && active.getPackageName() != null
+                && SAMSUNG.contentEquals(active.getPackageName()) ? active : null;
+    }
+
     private void inspect(long now) {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null || root.getPackageName() == null
-                || !SAMSUNG.contentEquals(root.getPackageName())) return;
+        AccessibilityNodeInfo root = samsungRoot();
+        if (root == null) return;
 
         Snapshot snapshot = new Snapshot();
         scan(root, snapshot, 0, false);
@@ -147,7 +163,10 @@ public final class BixbyAccessibilityService extends AccessibilityService {
             }
             return;
         }
-        if (s.textCallButton == null || !s.incomingScreen
+        // For automatic answering, require clear incoming-call evidence.
+        // A deliberate tap on the overlay's "Try AI Attend" may attempt the
+        // exact Samsung Text Call button without this additional screen label.
+        if (s.textCallButton == null || (!s.incomingScreen && now > autoWindowEnd)
                 || now - lastAnswerAttempt < 5000L) return;
         lastAnswerAttempt = now;
         if (click(s.textCallButton)) {
