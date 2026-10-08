@@ -126,8 +126,9 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         if (p.getBoolean(Prefs.AUTO_ATTEND, false) || now < autoWindowEnd) {
             tryBeginTextCall(snapshot, now);
         }
-        if (inTextCall && p.getBoolean(Prefs.LIVE_REPLY, false)) {
-            tryReply(snapshot, now);
+        if (inTextCall && (p.getBoolean(Prefs.LIVE_REPLY, false)
+                || p.getBoolean(Prefs.SAVE_BRIEF, false))) {
+            observeTurn(snapshot, now, p.getBoolean(Prefs.LIVE_REPLY, false));
         }
         handler.removeCallbacks(expire);
         handler.postDelayed(expire, 45000L);
@@ -157,27 +158,26 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         }
     }
 
-    private void tryReply(Snapshot s, long now) {
-        // Source roles, destination and call context MUST ALL be unambiguous.
-        if (!s.inCall || s.editables != 1 || s.sendButtons != 1 || s.inbound == 0
-                || s.callerText.isEmpty() || conversation == null || replies >= MAX_REPLIES
-                || now - lastReplySentAt < COOLDOWN_MS) return;
+    private void observeTurn(Snapshot s, long now, boolean autoReply) {
+        // Do not learn from ambiguous unlabeled chat bubbles or reply input.
+        if (!s.inCall || s.inbound == 0 || s.callerText.isEmpty() || conversation == null) return;
         String hash = fingerprint(s.callerText);
         if (hash.equals(lastInboundFingerprint) || hash.equals(lastSentFingerprint)) return;
         lastInboundFingerprint = hash;
         callerTurns++;
         String category = CallTurnGuard.category(s.callerText);
         if ("Urgent".equals(category) || "General enquiry".equals(intent)) intent = category;
+
+        if (!autoReply) return;
+        if (s.editables != 1 || s.sendButtons != 1 || s.editor == null || s.sender == null
+                || replies >= MAX_REPLIES || now - lastReplySentAt < COOLDOWN_MS) return;
         String answer = conversation.respond(s.callerText);
         if (answer.isEmpty()) return;
-        // The reply is generated locally from public owner instructions.
-        // Require a safe native destination and a uniquely matched Send button.
-        if (s.editor == null || s.sender == null) return;
-        Bundle b = new Bundle();
-        b.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, answer);
-        boolean typed = s.editor.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b);
+        Bundle text = new Bundle();
+        text.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, answer);
+        boolean typed = s.editor.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, text);
         if (!typed) {
-            Prefs.status(this, "Samsung reply field rejected text", "No content saved.");
+            Prefs.status(this, "Samsung reply field rejected local reply", "No caller text stored.");
             return;
         }
         boolean sent = click(s.sender);
@@ -185,10 +185,10 @@ public final class BixbyAccessibilityService extends AccessibilityService {
             lastSentFingerprint = fingerprint(answer);
             replies++;
             lastReplySentAt = now;
-            Prefs.status(this, "Reply click attempted (" + replies + "); confirm on real test call",
-                    "Raw conversation not stored. Last topic: " + intent);
+            Prefs.status(this, "Samsung reply click attempted (" + replies + ")", "Topic: " + intent
+                    + ". Verify that the caller actually heard the voice.");
         } else {
-            Prefs.status(this, "Send click failed; text might remain in Samsung input field",
+            Prefs.status(this, "Send click failed; Bixby input may contain unsent text",
                     "No raw caller content saved.");
         }
     }
