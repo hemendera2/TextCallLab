@@ -10,8 +10,8 @@ android {
         applicationId 'in.textcall.lab'
         minSdk 29
         targetSdk 35
-        versionCode 6
-        versionName '0.6-samsung-bridge-lab'
+        versionCode 7
+        versionName '0.7-samsung-bridge-lab'
     }
 
     compileOptions {
