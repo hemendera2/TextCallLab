@@ -7,6 +7,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -20,8 +21,18 @@ jobs:
         with:
           packages: 'platform-tools'
           log-accepted-android-sdk-licenses: 'false'
-      - name: Install SDK platform and build tools
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Install Android SDK, NDK and CMake
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Fetch pinned llama.cpp sources
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/cpp/vendor/llama.cpp
+          cd app/src/main/cpp/vendor/llama.cpp
+          git init -q
+          git remote add origin https://github.com/ggml-org/llama.cpp.git
+          git fetch --depth 1 origin c35b66744f13cb0dcc476af063e112122eee9355
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "c35b66744f13cb0dcc476af063e112122eee9355"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
