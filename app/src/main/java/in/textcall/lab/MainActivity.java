@@ -6,6 +6,10 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.Voice;
+import java.util.Locale;
+import java.util.Set;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -27,6 +31,9 @@ public final class MainActivity extends Activity {
     private TextView state;
     private TextView diagnostics;
     private TextView testOutput;
+    private TextView voiceStatus;
+    private TextToSpeech speech;
+    private boolean localVoiceReady = false;
 
     @Override public void onCreate(Bundle stateBundle) {
         super.onCreate(stateBundle);
@@ -42,8 +49,8 @@ public final class MainActivity extends Activity {
         title.setTextColor(Color.rgb(0, 80, 145));
         content.addView(title);
         content.addView(label("₹0 / no account / no API / no internet permission", 14));
-        content.addView(label("VERSION 0.2 — PRIVACY SAFE SCREEN PROBE", 15));
-        content.addView(label("PRIVACY: No internet permission, no call audio or contacts permission, no saved caller transcript, no automatic replies. This is a local diagnostic tool, NOT a human-level AI. Samsung One UI access has not been verified on your A52s.", 15));
+        content.addView(label("VERSION 0.3 — PRIVACY-SAFE OFFLINE VOICE PREVIEW", 15));
+        content.addView(label("PRIVACY: No internet permission, no call audio or contacts permission, no saved caller transcript, no automatic replies. This is a local scripted diagnostic tool, NOT a human-level AI. Voice preview plays on the phone speaker only; it does not enter a SIM call. Samsung One UI access has not been verified on your A52s.", 15));
 
         Button accessibility = button("1. OPEN ACCESSIBILITY SETTINGS");
         accessibility.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
@@ -86,11 +93,18 @@ public final class MainActivity extends Activity {
         testText = input("Type a caller sentence: Hello, price kya hai?", "Hello, who are you?", false);
         content.addView(testText);
         Button reply = button("GENERATE OFFLINE TEST REPLY");
-        reply.setOnClickListener(v -> testOutput.setText(OfflineResponder.reply(
-                testText.getText().toString(), owner.getText().toString(), instructions.getText().toString())));
+        reply.setOnClickListener(v -> showReplyPreview());
         content.addView(reply);
         testOutput = label("Test response appears here", 16);
         content.addView(testOutput);
+        voiceStatus = label("Voice preview has not been used. The system must have an installed offline English voice.", 13);
+        content.addView(voiceStatus);
+        Button stopVoice = button("STOP VOICE PREVIEW");
+        stopVoice.setOnClickListener(v -> {
+            if (speech != null) speech.stop();
+            voiceStatus.setText("Voice preview stopped.");
+        });
+        content.addView(stopVoice);
 
         content.addView(label("6. LIVE PROBE DIAGNOSTICS (phone-local)", 17));
         state = label("Service status not yet checked", 15);
@@ -116,6 +130,85 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         refresh();
+    }
+
+    private void showReplyPreview() {
+        // The typed dummy text is processed locally, never stored in diagnostics.
+        final String answer = OfflineResponder.reply(
+                testText.getText().toString(),
+                owner.getText().toString(),
+                instructions.getText().toString());
+        testOutput.setText(answer);
+        if (answer.isEmpty()) {
+            new android.app.AlertDialog.Builder(this).setTitle("No test text")
+                    .setMessage("Type a short dummy sentence and try again.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Offline scripted reply (NOT a call)")
+                .setMessage(answer + "\\n\\nTap PLAY VOICE to hear it from this phone's speaker. No microphone is used.")
+                .setPositiveButton("PLAY VOICE", (dialog, which) -> speakLocally(answer))
+                .setNegativeButton("CLOSE", null)
+                .show();
+    }
+
+    private void speakLocally(String answer) {
+        if (localVoiceReady && speech != null) {
+            playOffline(answer);
+            return;
+        }
+        if (speech != null) {
+            voiceStatus.setText("Offline speech engine is still initializing. Wait and tap PLAY VOICE again.");
+            return;
+        }
+        voiceStatus.setText("Checking installed device voices (offline only)...");
+        // Explicit user tap is required before initializing the phone's TTS engine.
+        speech = new TextToSpeech(getApplicationContext(), result ->
+            runOnUiThread(() -> {
+                if (speech == null || result != TextToSpeech.SUCCESS) {
+                    voiceStatus.setText("Text-to-speech engine unavailable. Configure an offline voice in Android Text-to-speech settings.");
+                    return;
+                }
+                Voice chosen = null;
+                Set<Voice> installedVoices = speech.getVoices();
+                if (installedVoices != null) {
+                    for (Voice voice : installedVoices) {
+                        Locale locale = voice.getLocale();
+                        if (locale == null || !"en".equalsIgnoreCase(locale.getLanguage())
+                                || voice.isNetworkConnectionRequired()) continue;
+                        if (chosen == null || "IN".equalsIgnoreCase(locale.getCountry())) {
+                            chosen = voice;
+                            if ("IN".equalsIgnoreCase(locale.getCountry())) break;
+                        }
+                    }
+                }
+                if (chosen == null || speech.setVoice(chosen) == TextToSpeech.ERROR) {
+                    localVoiceReady = false;
+                    voiceStatus.setText("No installed offline English voice found. Download one using the phone's Text-to-speech settings, then reopen this app.");
+                    return;
+                }
+                localVoiceReady = true;
+                playOffline(answer);
+            })
+        );
+    }
+
+    private void playOffline(String answer) {
+        if (speech == null || !localVoiceReady) return;
+        int outcome = speech.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "text-call-lab-local-preview");
+        voiceStatus.setText(outcome == TextToSpeech.SUCCESS
+                ? "Playing through the phone's speaker using an installed offline voice. This is NOT SIM call audio."
+                : "Offline voice playback failed. Check phone media volume and installed speech voices.");
+    }
+
+    @Override protected void onDestroy() {
+        if (speech != null) {
+            speech.stop();
+            speech.shutdown();
+            speech = null;
+        }
+        super.onDestroy();
     }
 
     private void refresh() {
