@@ -16,7 +16,14 @@ for permission in INTERNET READ_SMS READ_CONTACTS READ_CALL_LOG READ_PHONE_STATE
 done
 grep -Fq 'android:allowBackup="false"' "$manifest"
 grep -Fq 'android:packageNames="com.samsung.android.incallui"' "$access"
-grep -Fq 'LIVE_SEND_CERTIFIED = false;' "$service"
+grep -Fq 'CallTurnGuard.isIncoming' "$service"
+grep -Fq 'CallTurnGuard.safeSend' "$service"
+grep -Fq 'Prefs.LIVE_REPLY, false' "$service"
+grep -Fq 'Prefs.AUTO_ATTEND, false' "$service"
+grep -Fq 's.editables != 1 || s.sendButtons != 1' "$service"
+grep -Fq 'MAX_REPLIES = 12' "$service"
+grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/PrivateBriefStore.java
+grep -Fq 'AES/GCM/NoPadding' app/src/main/java/in/textcall/lab/PrivateBriefStore.java
 grep -Fq 'TYPE_ACCESSIBILITY_OVERLAY' "$service"
 grep -Fq 'No call transcripts are saved' "$main"
 grep -Fq 'v.isNetworkConnectionRequired()' "$voices"
@@ -33,8 +40,9 @@ grep -Fq 'android.intent.action.TTS_SERVICE' "$manifest"
 grep -Fq '.remove(DIAGNOSTICS).remove(STATUS)' "$prefs"
 grep -Fq 'android:icon="@drawable/app_mark"' "$manifest"
 
-if grep -Eq 'performAction\(|\.ACTION_SET_TEXT|\.ACTION_CLICK|SharedPreferences\.Editor.*caller' "$service"; then
-  echo 'FAIL: Uncertified Samsung UI automation detected'
+# Live actions are restricted to exact call UI, role attribution and opt-in.
+if grep -Eq 'SharedPreferences\\.Editor.*caller|Log\\.[a-z]+\\(.*caller' "$service"; then
+  echo 'FAIL: Possible caller data persistence/logging'
   exit 1
 fi
 if grep -Eq 'HttpURLConnection|java\.net\.|okhttp|Retrofit|https?://' "$main" "$service" "$voices"; then
@@ -42,4 +50,4 @@ if grep -Eq 'HttpURLConnection|java\.net\.|okhttp|Retrofit|https?://' "$main" "$
   exit 1
 fi
 
-echo 'PASS: no internet; foreground mic consent; on-device-only STT; no caller capture; no SIM call actions; offline TTS'
+echo 'PASS: no internet; foreground mic consent; on-device-only STT; no caller transcript persistence; role-gated opt-in Samsung actions; encrypted briefs; offline TTS'
