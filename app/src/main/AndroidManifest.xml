@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Discover only speech services installed on the device. -->
     <queries>
+        <package android:name="com.CodeBySonu.VoxSherpa" />
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
