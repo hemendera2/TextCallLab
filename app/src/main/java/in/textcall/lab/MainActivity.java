@@ -56,6 +56,9 @@ public final class MainActivity extends Activity {
     private final int REQUEST_MIC = 4107;
     private final int REQUEST_MODEL = 4208;
     private long talkEpoch = 0L;
+    private boolean modelThinking = false;
+    private long modelThinkingSince = 0L;
+    private final android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -311,6 +314,11 @@ public final class MainActivity extends Activity {
         space(controls, 12);
         talkStatusView = text(talkStatus, 13, SUB, false);
         controls.addView(talkStatusView);
+        if (modelThinking) {
+            space(controls, 9);
+            controls.addView(action("Stop slow AI inference  ■", Color.rgb(250,235,234),
+                    Color.rgb(171,55,40), () -> { stopTalk(); render(); }));
+        }
         body.addView(controls);
         space(body, 14);
 
@@ -359,6 +367,8 @@ public final class MainActivity extends Activity {
         autoConversation = false;
         pendingMicStart = false;
         ++talkEpoch;
+        if (modelThinking) LocalModel.get().cancel();
+        modelThinking = false;
         if (inputSpeech != null) inputSpeech.stop();
         if (voice != null) voice.stop();
         setTalkStatus("Session paused. Microphone off.");
@@ -405,16 +415,24 @@ public final class MainActivity extends Activity {
         });
     }
     private void processTalk(String phrase) {
+        if (modelThinking) {
+            setTalkStatus("An offline reply is already running. Tap Stop before a new request.");
+            return;
+        }
         inputSpeech.stop();
         if (LocalModel.get().isLoaded()) {
             final long epoch = ++talkEpoch;
-            setTalkStatus("Offline Qwen is thinking on CPU…");
+            modelThinking = true;
+            modelThinkingSince = android.os.SystemClock.elapsedRealtime();
+            setTalkStatus("Qwen is starting local inference…");
+            watchInference(epoch);
             final List<String> history = session.recentTurns();
             LocalModel.get().reply(p.getString(Prefs.PROFILE_NAME, "Owner"),
                     p.getString(Prefs.PROFILE_INFO, ""),
                     p.getString(Prefs.PROFILE_RULES, ""),
                     history, phrase, (reply, error, elapsed) -> runOnUiThread(() -> {
                         if (epoch != talkEpoch || currentTab != 1 || !foreground) return;
+                        modelThinking = false;
                         if (reply.isEmpty()) {
                             autoConversation = false;
                             setTalkStatus("Offline model returned no reply: " + error);
@@ -432,6 +450,16 @@ public final class MainActivity extends Activity {
             render();
             speakTalkReply(answer);
         }
+    }
+    private void watchInference(long epoch) {
+        uiHandler.postDelayed(() -> {
+            if (epoch != talkEpoch || !modelThinking || currentTab != 1 || !foreground) return;
+            long seconds = (android.os.SystemClock.elapsedRealtime() - modelThinkingSince) / 1000L;
+            String stage = LocalModel.get().progress();
+            setTalkStatus("Qwen CPU: " + seconds + "s · " + stage
+                    + (seconds > 35 ? " · Timeout requested; waiting for CPU to stop." : ""));
+            watchInference(epoch);
+        }, 1000L);
     }
     private void speakTalkReply(String answer) {
         boolean started = voice.speak(answer, () -> {
@@ -824,6 +852,8 @@ public final class MainActivity extends Activity {
     @Override protected void onPause() {
         foreground = false;
         ++talkEpoch;
+        if (modelThinking) LocalModel.get().cancel();
+        modelThinking = false;
         if (inputSpeech != null) inputSpeech.stop();
         autoConversation = false;
         super.onPause();
