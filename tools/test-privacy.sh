@@ -57,7 +57,7 @@ grep -Fq '.remove(DIAGNOSTICS).remove(STATUS)' "$prefs"
 grep -Fq 'android:icon="@drawable/app_mark"' "$manifest"
 grep -Fq 'android:name=".SecretaryActivity"' "$manifest"
 grep -Fq 'android:label="KALLVO"' "$manifest"
-grep -Fq 'private final String[] names={"Home","Talk","Settings"}' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'final String[] names={"Home","Talk","Settings"}' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'String gender = gender(voice);' "$voices"
 grep -Fq 'KEY_FEATURE_NOT_INSTALLED' "$voices"
 grep -Fq 'isNetworkConnectionRequired()' "$voices"
