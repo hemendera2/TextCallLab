@@ -15,7 +15,7 @@ import javax.crypto.spec.GCMParameterSpec;
 
 /**
  * Device-only encrypted brief. Never stores caller audio, caller name/number or
- * transcript. Encryption failure fails closed; there is no plaintext fallback.
+ * transcript. Optional AI-derived brief may contain sensitive inferred details,\n * encrypted locally. Encryption failure fails closed; no plaintext fallback.
  */
 final class PrivateBriefStore {
     private static final String KEY = "callcompanion_brief_v1";
@@ -38,6 +38,9 @@ final class PrivateBriefStore {
     }
 
     boolean save(String category, String followUp, int turns) {
+        return save(category, followUp, turns, "");
+    }
+    boolean save(String category, String followUp, int turns, String aiSummary) {
         try {
             String safeCategory = safe(category, 40);
             String safeAction = safe(followUp, 150);
@@ -45,7 +48,9 @@ final class PrivateBriefStore {
                     + "\nIncoming turns: " + Math.max(0, Math.min(turns, 100))
                     + "\nNext action: " + safeAction
                     + "\nCaller name/number: Not collected"
-                    + "\nTranscript/audio: Not stored";
+                    + "\nTranscript/audio: Not stored"
+                    + (aiSummary == null || aiSummary.trim().isEmpty() ? ""
+                        : "\nAI-generated summary (verify before acting): " + safe(aiSummary, 480));
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, key());
             byte[] ciphertext = cipher.doFinal(text.getBytes(StandardCharsets.UTF_8));
