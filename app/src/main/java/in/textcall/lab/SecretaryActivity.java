@@ -61,6 +61,7 @@ public final class SecretaryActivity extends Activity {
     private long generationId;
     private long began;
     private TextView progressView;
+    private TextView voiceHealthView;
     private LinearLayout frame;
     private int currentScreen=0;
 
@@ -73,6 +74,9 @@ public final class SecretaryActivity extends Activity {
         prefs=Prefs.get(this);
         speech=new LocalSpeechInput(this);
         voice=new LocalVoiceEngine(this,prefs);
+        voice.setStatusListener(message -> {
+            if (voiceHealthView != null && "voice".equals(detail)) voiceHealthView.setText(message);
+        });
         resetChat();
         voice.start(ok -> runOnUiThread(() -> {
             if (!isFinishing()) show();
@@ -256,6 +260,7 @@ public final class SecretaryActivity extends Activity {
         root.addView(bottom);
         setContentView(root);
         progressView=null;
+        voiceHealthView=null;
 
         if(!detail.isEmpty()) {
             if("voice".equals(detail)) showVoices();
@@ -474,6 +479,22 @@ public final class SecretaryActivity extends Activity {
                 ? "System speech engine" : voice.activeEngine(),12,SOFT,false);
         engine.addView(chosen);
         pad(engine,10);
+        voiceHealthView=text(voice.lastStatus(),12,SOFT,false);
+        engine.addView(voiceHealthView);
+        pad(engine,6);
+        int music=voice.musicVolume();
+        engine.addView(text(music==0
+                ? "Media volume is MUTED. Use Volume Up during preview."
+                : music<0?"Media volume unavailable"
+                   :"Media volume: "+music+" (turn up if needed)",12,music==0?Color.rgb(191,57,36):SOFT,false));
+        pad(engine,10);
+        engine.addView(press("Reconnect speech engine",false,()->{
+            voice.useEngine(prefs.getString(Prefs.TTS_ENGINE,""),ok->runOnUiThread(()->{
+                if(!isFinishing())show();
+                if(!ok)toast("Engine unavailable; check Voice studio details.");
+            }));
+        }));
+        pad(engine,8);
         engine.addView(press("Change installed engine",false,()->enginePicker()));
         pad(engine,10);
         engine.addView(press("Manage offline voice packs   ↗",false,this::speechSettings));
@@ -508,8 +529,9 @@ public final class SecretaryActivity extends Activity {
             pick.setOnClickListener(view->{
                 prefs.edit().putString(Prefs.VOICE,selected.getName())
                         .putString(Prefs.LANGUAGE,selected.getLocale().toLanguageTag()).apply();
-                voice.speak(sample(selected.getLocale()));
                 show();
+                if(!voice.speak(shortSample(selected.getLocale())))
+                    toast(voice.lastStatus());
             });
             identity.addView(pick);
             pad(identity,7);
@@ -518,9 +540,10 @@ public final class SecretaryActivity extends Activity {
             caption(identity,"No matching offline speaker installed. Pick an offline neural voice pack from your speech engine.");
         }
         pad(identity,8);
-        identity.addView(press("▶  Preview selected voice",true,()->{
-            if(!voice.speak(sample(Locale.forLanguageTag(prefs.getString(Prefs.LANGUAGE,"hi-IN")))))
-                toast("Select and install an offline voice first");
+        identity.addView(press("▶  Test selected voice (no AI)",true,()->{
+            boolean started=voice.speak(shortSample(Locale.forLanguageTag(
+                    prefs.getString(Prefs.LANGUAGE,"hi-IN"))));
+            if(!started)toast(voice.lastStatus());
         }));
         pad(identity,12);
         TextView pace=text("Speaking speed · "+prefs.getInt(Prefs.SPEED,100)+"%",12,SOFT,true);
@@ -544,6 +567,12 @@ public final class SecretaryActivity extends Activity {
         pad(info,8);
         caption(info,"Piper & Kokoro are neural speech engines. Third-party app installation and voice downloads are optional; KALLVO never bundles another app's GPL code.");
         pad(info,12);
+        info.addView(press("Open VoxSherpa and test voice directly   ↗",false,()->{
+            Intent launch=getPackageManager().getLaunchIntentForPackage(TTS_APP);
+            if(launch!=null)startActivity(launch);
+            else toast("Open VoxSherpa TTS from app drawer → Generate → test Hindi F2.");
+        }));
+        pad(info,8);
         info.addView(press("Explore offline neural engine   ↗",false,()->{
             try {
                 Intent open=new Intent(Intent.ACTION_VIEW,
@@ -554,6 +583,11 @@ public final class SecretaryActivity extends Activity {
             }
         }));
         gapCard(frame,info);
+    }
+    private String shortSample(Locale locale) {
+        return "hi".equals(locale.getLanguage())
+                ? "नमस्ते, आपका स्वागत है।"
+                : "Hello! Welcome.";
     }
     private String sample(Locale locale) {
         if("hi".equals(locale.getLanguage()))
@@ -857,11 +891,15 @@ public final class SecretaryActivity extends Activity {
     }
     private void speak(String answer) {
         if(!voice.speak(answer,()->{
-            status("Ready for the next question");
+            status("Voice completed. Ready for the next question.");
             if(listeningLoop && foreground && tab==1)beginListening();
+        },()->{
+            listeningLoop=false;
+            status("Voice failed: "+voice.lastStatus()+
+                    ". Open Settings → Voice studio, then test voice without AI.");
         })) {
             listeningLoop=false;
-            status("Select an installed offline voice in Settings → Voice studio.");
+            status("Voice unavailable: "+voice.lastStatus());
         }
     }
     private void watch(long id) {
