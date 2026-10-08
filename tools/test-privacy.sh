@@ -78,7 +78,7 @@ grep -Fq 'getInstalledOnDeviceLanguages' app/src/main/java/in/textcall/lab/Local
 grep -Fq 'onBeginSynthesis' "$voices"
 grep -Fq 'Speech completed' "$voices"
 grep -Fq 'TTS synthesis/playback FAILED' "$voices"
-grep -Fq 'getCurrentEngine()' "$voices"
+grep -Fq 'tts.getDefaultEngine()' "$voices"
 grep -Fq 'HindiLanguage.replyStyle' app/src/main/java/in/textcall/lab/PromptFormatter.java
 grep -Fq 'HindiLanguage.likelyHindi' app/src/main/java/in/textcall/lab/FastReply.java
 grep -Fq 'Supertonic external-app compatibility is unverified' app/src/main/java/in/textcall/lab/SecretaryActivity.java
