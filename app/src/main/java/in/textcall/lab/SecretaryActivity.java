@@ -262,6 +262,7 @@ public final class SecretaryActivity extends Activity {
             else if("profile".equals(detail)) showProfile();
             else if("calls".equals(detail)) showCalls();
             else if("privacy".equals(detail)) showPrivacy();
+            else if("models".equals(detail)) showModels();
         } else if(tab==0) showHome();
         else if(tab==1) showTalk();
         else showSettings();
@@ -349,7 +350,7 @@ public final class SecretaryActivity extends Activity {
             LinearLayout model=horizontal();
             model.setBackground(shape(Color.rgb(231,247,239),14,0));
             model.setPadding(dp(13),dp(12),dp(13),dp(12));
-            model.addView(text("●  Qwen ready on device",13,GREEN,true));
+            model.addView(text("●  Model loaded · test reply speed",13,GREEN,true));
             frame.addView(model);
             pad(frame,15);
         }
@@ -425,6 +426,9 @@ public final class SecretaryActivity extends Activity {
         section(frame,"PERSONALIZE","Your secretary, your rules.");
         pad(frame,15);
         LinearLayout preferences=card();
+        navRow(preferences,"AI model & speed",LocalModel.get().isLoaded()
+                ? "Loaded: speed needs testing" : "Load or change your GGUF",
+                "›",()->{detail="models";show();});
         navRow(preferences,"Voice studio",voice.chosenVoiceLabel(),"›",()->{detail="voice";show();});
         navRow(preferences,"Your secretary","Name, public facts and instructions","›",()->{
             detail="profile";show();
@@ -573,6 +577,57 @@ public final class SecretaryActivity extends Activity {
                     if(!ready)toast("Engine not ready. Install a voice pack in Android settings.");
                 }));
             }).setNegativeButton("Cancel",null).show();
+    }
+
+    private void showModels() {
+        backTitle("OFFLINE AI","Fast model controls.");
+        LinearLayout options=card();
+        options.addView(text(LocalModel.get().isLoaded() ? "Model is loaded"
+                    : LocalModel.isImported(this) ? "Model imported" : "No GGUF imported",17,INK,true));
+        pad(options,8);
+        caption(options,"Your current Qwen3.5 0.8B is very slow on A52s. Try a smaller Qwen3 0.6B GGUF, then run the benchmark. Model is never downloaded by the app.");
+        pad(options,12);
+        options.addView(press("Replace model from Downloads",true,()->new AlertDialog.Builder(this)
+            .setTitle("Replace local AI model?")
+            .setMessage("The current model will be unloaded. Your original downloaded GGUF file stays untouched.")
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Choose", (d,w)->{stopTurn();chooseGGUF();}).show()));
+        pad(options,9);
+        options.addView(press("Unload model from RAM",false,()->
+            LocalModel.get().unload((ok,msg)->runOnUiThread(()->{callState=msg;show();}))));
+        gapCard(frame,options);
+        LinearLayout measure=card();
+        measure.addView(text("REAL DEVICE SPEED TEST",11,BLUE,true));
+        pad(measure,7);
+        caption(measure,"Tests genuine offline inference without instant intent shortcuts.");
+        pad(measure,10);
+        TextView reading=text(prefs.getString("model_benchmark_status","Not benchmarked yet"),13,INK,false);
+        measure.addView(reading);
+        pad(measure,11);
+        measure.addView(press("Benchmark one short AI reply",true,()->{
+            if(!LocalModel.get().isLoaded()){toast("Load the GGUF in Talk first");return;}
+            if(thinking)return;
+            thinking=true;
+            long id=++generationId;
+            reading.setText("Testing CPU model with 12-second limit…");
+            LocalModel.get().reply("Owner","","Be brief",new ArrayList<>(),
+                "Hello, how are you?",(reply,error,millis)->runOnUiThread(()->{
+                if(id!=generationId)return;
+                thinking=false;
+                String result=reply.isEmpty()?"Model too slow: "+error
+                        :"Generated in "+(millis/1000f)+"s: "+reply;
+                prefs.edit().putString("model_benchmark_status",result).apply();
+                callState=result;
+                reading.setText(result);
+            }));
+            ui.postDelayed(()->{
+                if(thinking && id==generationId)
+                    reading.setText("CPU status: "+LocalModel.get().progress());
+            },3000);
+        }));
+        pad(measure,12);
+        caption(measure,"Under 5s: desired. 5–12s: slow. Over 12s: timeout. Measured speed depends on your phone.");
+        gapCard(frame,measure);
     }
 
     private void showProfile() {
@@ -759,6 +814,15 @@ public final class SecretaryActivity extends Activity {
     private void processTalk(String phrase) {
         if(thinking){status("Finish or stop the current answer first");return;}
         speech.stop();
+        String quick=FastReply.respond(phrase,
+                prefs.getString(Prefs.PROFILE_NAME,"Owner"),chat.recentTurns());
+        if(!quick.isEmpty()) {
+            chat.recordExchange(phrase,quick);
+            status("Instant routine reply · offline rules, no model wait");
+            show();
+            speak(quick);
+            return;
+        }
         if(!LocalModel.get().isLoaded()){
             String answer=chat.respond(phrase);
             status("Using short scripted fallback. Load GGUF for natural AI replies.");
@@ -779,7 +843,9 @@ public final class SecretaryActivity extends Activity {
                     thinking=false;
                     if(reply.isEmpty()){
                         listeningLoop=false;
-                        status(error);
+                        status("Offline AI too slow: "+error+
+                                ". Try smaller GGUF via Settings → AI model & speed.");
+                        prefs.edit().putString("model_benchmark_status","Timed out: "+error).apply();
                         show();
                         return;
                     }
