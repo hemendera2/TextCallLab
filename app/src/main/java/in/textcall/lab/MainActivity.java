@@ -3,6 +3,9 @@ package in.textcall.lab;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.Manifest;
+import android.os.Build;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -36,13 +39,20 @@ public final class MainActivity extends Activity {
     private static final int SUB = Color.rgb(91, 105, 127);
     private static final int BLUE = Color.rgb(37, 93, 238);
     private static final int BORDER = Color.rgb(224, 232, 244);
-    private final String[] tabs = {"Home", "Voice studio", "Privacy"};
+    private final String[] tabs = {"Home", "Talk", "Voices", "Privacy"};
     private SharedPreferences p;
     private LocalVoiceEngine voice;
     private LinearLayout body;
     private int currentTab = 0;
     private String previewReply = "";
     private boolean voiceInitialized = false;
+    private LocalSpeechInput inputSpeech;
+    private ConversationEngine session;
+    private boolean autoConversation = false;
+    private boolean foreground = false;
+    private String talkStatus = "Ready for a new private voice session.";
+    private TextView talkStatusView;
+    private final int REQUEST_MIC = 4107;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -52,6 +62,8 @@ public final class MainActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         p = Prefs.get(this);
         voice = new LocalVoiceEngine(this, p);
+        inputSpeech = new LocalSpeechInput(this);
+        resetSession();
         render();
         voice.start(ready -> runOnUiThread(() -> {
             voiceInitialized = ready;
@@ -61,6 +73,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        foreground = true;
         if (body != null) render();
     }
 
@@ -101,13 +114,14 @@ public final class MainActivity extends Activity {
             item.setGravity(Gravity.CENTER);
             item.setPadding(dp(7), dp(12), dp(7), dp(12));
             item.setBackground(round(i == currentTab ? Color.rgb(236, 242, 255) : Color.WHITE, 15, 0));
-            item.setOnClickListener(v -> { currentTab = at; render(); });
+            item.setOnClickListener(v -> { if (at != 1) stopTalk(); currentTab = at; render(); });
             nav.addView(item, new LinearLayout.LayoutParams(0, -2, 1f));
         }
         root.addView(nav);
         setContentView(root);
         if (currentTab == 0) showHome();
-        else if (currentTab == 1) showVoice();
+        else if (currentTab == 1) showTalk();
+        else if (currentTab == 2) showVoice();
         else showPrivacy();
     }
 
@@ -172,7 +186,7 @@ public final class MainActivity extends Activity {
         next.addView(text("Choose among installed offline voices, adjust tone and test instant spoken replies.", 13, SUB, false));
         space(next, 13);
         next.addView(action("Explore voice options  →", NAVY, Color.WHITE, () -> {
-            currentTab = 1; render();
+            currentTab = 2; render();
         }));
         body.addView(next);
         space(body, 16);
@@ -182,13 +196,172 @@ public final class MainActivity extends Activity {
         space(truth, 8);
         truth.addView(statusRow("Offline scripted reply", "Available", true));
         truth.addView(statusRow("Offline speech preview", voiceInitialized ? "Available with installed voice" : "Voice engine unavailable / loading", voiceInitialized));
+        truth.addView(statusRow("On-device voice conversation", "Talk tab: experimental offline STT + rules + TTS", true));
         truth.addView(statusRow("SIM-call AI takeover", "Not supported by Android app", false));
         truth.addView(statusRow("Human-level generative AI", "Not included in this build", false));
         body.addView(truth);
     }
 
+    private void showTalk() {
+        body.addView(text("Talk to your assistant", 27, NAVY, true));
+        body.addView(text("Local conversation lab: you speak into THIS phone's microphone; it answers on the speaker. It does NOT hear or speak inside an existing SIM call.", 13, SUB, false));
+        space(body, 14);
+
+        LinearLayout controls = card();
+        controls.addView(text("TWO-WAY VOICE LAB", 11, BLUE, true));
+        space(controls, 9);
+        controls.addView(text(inputSpeech.isSupported()
+                ? "On-device speech service detected"
+                : "Offline speech recognition unavailable", 14,
+                inputSpeech.isSupported() ? Color.rgb(23, 125, 97) : Color.rgb(158, 77, 35), true));
+        controls.addView(text("Microphone is only used with permission while this screen is active. No call recording, no cloud fallback, and no saved transcript history.", 12, SUB, false));
+        space(controls, 12);
+        String listening = inputSpeech.isListening() ? "Listening…" : "Tap to speak";
+        controls.addView(action("🎙  " + listening, BLUE, Color.WHITE, () -> {
+            autoConversation = false;
+            requestMic();
+        }));
+        space(controls, 8);
+        controls.addView(action(autoConversation ? "Stop hands-free session  ■" : "Start hands-free turn-taking  ▶",
+                autoConversation ? Color.rgb(255, 235, 231) : Color.rgb(233, 242, 255),
+                autoConversation ? Color.rgb(172, 54, 43) : BLUE, () -> {
+                    if (autoConversation) { stopTalk(); render(); }
+                    else {
+                        autoConversation = true;
+                        requestMic();
+                        render();
+                    }
+                }));
+        space(controls, 7);
+        controls.addView(text("Hands-free mode: listens to one phrase, answers, then listens again only while the app remains on screen. It cannot interrupt a SIM call.", 11, SUB, false));
+        space(controls, 12);
+        talkStatusView = text(talkStatus, 13, SUB, false);
+        controls.addView(talkStatusView);
+        body.addView(controls);
+        space(body, 14);
+
+        LinearLayout sessionCard = card();
+        sessionCard.addView(text("PRIVATE SESSION", 11, BLUE, true));
+        space(sessionCard, 7);
+        sessionCard.addView(text("Conversation memory", 19, NAVY, true));
+        sessionCard.addView(text("Current topic and up to 6 recent exchanges are held in RAM until the session ends. The reply logic is rules-based, not a generative LLM.", 12, SUB, false));
+        space(sessionCard, 10);
+        List<String> turns = session.recentTurns();
+        if (turns.isEmpty()) sessionCard.addView(text("No turns yet. Ask about services, meeting, price, callback, or speak a greeting.", 13, SUB, false));
+        else for (String t : turns) {
+            boolean assistant = t.startsWith("Assistant:");
+            TextView bubble = text(t, 13, assistant ? BLUE : NAVY, false);
+            bubble.setPadding(dp(11), dp(10), dp(11), dp(10));
+            bubble.setBackground(round(assistant ? Color.rgb(233, 242, 255)
+                    : Color.rgb(244, 247, 252), 13, 0));
+            sessionCard.addView(bubble);
+            space(sessionCard, 6);
+        }
+        space(sessionCard, 12);
+        EditText typed = input("Type a sample phrase if your phone has no offline recognizer", "", 2);
+        sessionCard.addView(typed);
+        space(sessionCard, 9);
+        sessionCard.addView(action("Send typed message & hear reply", NAVY, Color.WHITE, () -> {
+            String utterance = typed.getText().toString().trim();
+            if (utterance.isEmpty()) { toast("Enter a sample sentence first."); return; }
+            processTalk(utterance);
+        }));
+        space(sessionCard, 8);
+        sessionCard.addView(action("Clear private session & stop microphone", Color.rgb(239, 243, 250), NAVY,
+                () -> { stopTalk(); resetSession(); render(); }));
+        body.addView(sessionCard);
+        space(body, 14);
+        body.addView(text("Safety: The assistant discloses that it is automated. It cannot book appointments, initiate calls or forward messages, and will not request passwords or OTPs.", 12, SUB, false));
+    }
+
+    private void resetSession() {
+        session = new ConversationEngine(
+                p.getString(Prefs.PROFILE_NAME, "Owner"),
+                p.getString(Prefs.PROFILE_INFO, ""),
+                p.getString(Prefs.PROFILE_RULES, ""));
+        talkStatus = "Ready for a private voice session.";
+    }
+    private void stopTalk() {
+        autoConversation = false;
+        if (inputSpeech != null) inputSpeech.stop();
+        if (voice != null) voice.stop();
+        setTalkStatus("Session paused. Microphone off.");
+    }
+    private void setTalkStatus(String status) {
+        talkStatus = status;
+        if (talkStatusView != null) talkStatusView.setText(status);
+    }
+    private void requestMic() {
+        if (!inputSpeech.isSupported()) {
+            setTalkStatus("On-device speech recognizer unavailable. Use typed text; cloud recognition is disabled.");
+            autoConversation = false;
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_MIC);
+            return;
+        }
+        startMic();
+    }
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grants) {
+        super.onRequestPermissionsResult(requestCode, permissions, grants);
+        if (requestCode == REQUEST_MIC) {
+            if (grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) startMic();
+            else { autoConversation = false; setTalkStatus("Microphone not permitted. Typed replies remain available."); }
+        }
+    }
+    private void startMic() {
+        if (!foreground || currentTab != 1 || inputSpeech.isListening()) return;
+        voice.stop();
+        inputSpeech.listen(p.getString(Prefs.SPEECH_LANGUAGE, "hi-IN"), new LocalSpeechInput.Callback() {
+            @Override public void onUpdate(String s) { setTalkStatus(s); }
+            @Override public void onPartial(String s) {
+                setTalkStatus("Listening: " + (s.length() > 120 ? s.substring(0,120) : s));
+            }
+            @Override public void onFinal(String text) { processTalk(text); }
+            @Override public void onError(String s) {
+                autoConversation = false;
+                setTalkStatus(s);
+            }
+        });
+    }
+    private void processTalk(String phrase) {
+        inputSpeech.stop();
+        String answer = session.respond(phrase);
+        if (answer.isEmpty()) return;
+        setTalkStatus("Reply generated locally. Speaking now…");
+        render();
+        boolean started = voice.speak(answer, () -> {
+            setTalkStatus("Reply finished.");
+            if (autoConversation && foreground && currentTab == 1) startMic();
+        });
+        if (!started) {
+            autoConversation = false;
+            setTalkStatus("Reply generated, but no installed offline voice available. Choose one in Voices.");
+        }
+    }
+
     private void showVoice() {
         body.addView(text("Voice studio", 28, NAVY, true));
+        LinearLayout recognition = card();
+        recognition.addView(text("VOICE INPUT LANGUAGE", 11, BLUE, true));
+        recognition.addView(text("Used for in-app microphone recognition only; unsupported offline languages show an error without sending speech to a server.", 12, SUB, false));
+        space(recognition, 8);
+        final String[] recognitionTags = {"hi-IN", "en-IN", "en-US"};
+        final String[] labels = {"Hindi / Hinglish (India)", "English (India)", "English (United States)"};
+        LinearLayout choices = horizontal();
+        for (int i=0; i<recognitionTags.length; i++) {
+            final String tag = recognitionTags[i];
+            TextView chip = pill(labels[i], p.getString(Prefs.SPEECH_LANGUAGE, "hi-IN").equals(tag)
+                    ? BLUE : Color.rgb(237,243,251),
+                    p.getString(Prefs.SPEECH_LANGUAGE, "hi-IN").equals(tag) ? Color.WHITE : NAVY);
+            chip.setTextSize(10);
+            chip.setOnClickListener(v -> { p.edit().putString(Prefs.SPEECH_LANGUAGE, tag).apply(); render(); });
+            choices.addView(chip, new LinearLayout.LayoutParams(0,-2,1f));
+        }
+        recognition.addView(choices);
+        body.addView(recognition);
+        space(body, 14);
         body.addView(text("Choose language and voice variants installed on your phone. Your preferences are saved locally.", 13, SUB, false));
         space(body, 17);
         LinearLayout voiceCard = card();
@@ -342,7 +515,7 @@ public final class MainActivity extends Activity {
         status.addView(text("SECURITY POSTURE", 11, BLUE, true));
         space(status, 10);
         status.addView(statusRow("No internet permission", "Enforced in manifest", true));
-        status.addView(statusRow("No microphone / recording", "Enforced in manifest", true));
+        status.addView(statusRow("Microphone permission", "Only for opt-in, in-app speech recognition; no recording saved", true));
         status.addView(statusRow("No contacts / SMS / call history", "Enforced in manifest", true));
         status.addView(statusRow("Samsung-only screen probe", "Opt-in, metadata only", true));
         status.addView(statusRow("Automatically send caller messages", "Permanently disabled", true));
@@ -361,10 +534,16 @@ public final class MainActivity extends Activity {
         space(profile, 8);
         EditText info = input("Public facts / business details (optional)", p.getString(Prefs.PROFILE_INFO, ""), 3);
         profile.addView(info);
+        space(profile, 8);
+        EditText rules = input("Conversation instructions (public-safe guidelines, not an LLM prompt)",
+                p.getString(Prefs.PROFILE_RULES, ""), 3);
+        profile.addView(rules);
         space(profile, 10);
         profile.addView(action("Save profile on this device", BLUE, Color.WHITE, () -> {
             p.edit().putString(Prefs.PROFILE_NAME, name.getText().toString().trim())
-                    .putString(Prefs.PROFILE_INFO, info.getText().toString().trim()).apply();
+                    .putString(Prefs.PROFILE_INFO, info.getText().toString().trim())
+                    .putString(Prefs.PROFILE_RULES, rules.getText().toString().trim()).apply();
+            resetSession();
             toast("Local profile saved.");
         }));
         body.addView(profile);
@@ -517,7 +696,14 @@ public final class MainActivity extends Activity {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
     private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + .5f); }
+    @Override protected void onPause() {
+        foreground = false;
+        if (inputSpeech != null) inputSpeech.stop();
+        autoConversation = false;
+        super.onPause();
+    }
     @Override protected void onDestroy() {
+        if (inputSpeech != null) inputSpeech.stop();
         if (voice != null) voice.shutdown();
         super.onDestroy();
     }
