@@ -19,6 +19,11 @@ public final class TestPromptFormatter {
         check(PromptFormatter.clean("Hello ji.<|im_end|> bad").equals("Hello ji."), "EOT strip");
         check(PromptFormatter.clean("<think>internal</think>Namaste.").equals("Namaste."), "Think strip");
         check(PromptFormatter.clean("<think>unfinished").isEmpty(), "Unfinished reasoning filtered");
-        System.out.println("PASS: 10 Qwen prompt and response sanitization tests");
+        String briefing=PromptFormatter.brief(Arrays.asList("Kal meeting chahiye", "Price kya hai"));
+        check(briefing.contains("Reason:") && briefing.contains("Priority:"),
+              "Actionable brief prompt required fields");
+        check(briefing.contains("Kal meeting chahiye"), "Caller statements not supplied");
+        check(briefing.endsWith("<|im_start|>assistant\n"), "Bad summary generation prefix");
+        System.out.println("PASS: 13 Qwen prompts, summaries and response sanitization tests");
     }
 }
