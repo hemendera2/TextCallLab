@@ -1,3 +1,25 @@
+# KALLVO v0.9.1 — CPU-latency emergency fix (Samsung A52s)
+
+**Observed issue:** user screenshot shows 30+ seconds with `Prefill 0/203 tokens` on Qwen3.5 0.8B, so v0.9 cannot be used as a realtime AI-call system.
+
+## Repairs
+- `llama_context_params.abort_callback` now interrupts llama.cpp **inside** CPU graph processing if the request runs over a **12-second** CPU budget or the user presses Stop. The previous implementation only checked time between 64-token batches and could remain stuck on batch 1. The callback is cooperative and cannot guarantee a hard 12-second wall-time stop under all OS conditions.
+- First prefill batch reduced from 64 to 16 tokens; prompt shortened substantially and historical context capped. Decoding max 32 tokens per short conversational reply. Smaller batch may change throughput; results must be measured on the actual A52s.
+- Safely classified greeting, meeting, price, callback, emergency and confidential details take a deterministic **instant response path**. This path is openly rules-based, does not invent commitments and is **not** a generative AI response.
+- For genuinely open-ended conversations the GGUF model still runs locally, with 12-second budget and clear failure message, not an indefinite Thinking screen. Model may still be inadequate for natural telephone timing.
+- In Settings > AI model & speed, user may benchmark the **actual model** without instant shortcut and replace the GGUF via Android file picker without reinstalling the APK. The original Downloads file is untouched.
+- **Alternative CPU model:** [Qwen3-0.6B Q4_K_M](https://huggingface.co/bartowski/Qwen_Qwen3-0.6B-GGUF), about 484 MB. Its actual prefill and token/s on A52s must be measured, not assumed. Preserve the existing Qwen3.5 GGUF in Downloads for comparison. A model replacement copies the GGUF into app-private storage.
+- Faster inference backends like MNN may be worth a separate Android runtime evaluation; **not included** in v0.9.1. Avoid claiming performance observed on other Android devices applies to the A52s.
+- Bixby Text Call automatic SIM voice delivery remains **UNVERIFIED**, even if in-app AI replies speed up. The model is unrelated to Android-protected SIM audio injection.
+
+## Test sequence
+1. Install newest successful APK via GitHub Actions. Open Settings > AI model & speed > Benchmark one short AI reply.
+2. If the model times out, download an alternative smaller GGUF to Downloads, then use Replace model from Downloads. Load it again from Talk and run the same benchmark.
+3. A typical simple greeting or clear meeting request in Talk should use the fast deterministic path; ask a complex unseen question to measure real generative quality and speed.
+4. Record results for both models: prompt prefill duration, decoded tokens and total reply latency, on a cool fully charged A52s with no power-saving mode. Only then decide which is acceptable.
+5. Keep automatic call answering / reply switches off until a trusted, consented test with Samsung Bixby Text Call proves the actual audio reply path.
+
+## Previous release
 # KALLVO — v0.9 product UX and voice studio
 
 KALLVO is the working product brand for this iteration, **not trademark-cleared**. KALLVO has an original minimal three-tab native Android interface: Home, Talk, Settings. The old CallCompanion advanced diagnostic interface remains available only as "Open technician panel" in Settings.
