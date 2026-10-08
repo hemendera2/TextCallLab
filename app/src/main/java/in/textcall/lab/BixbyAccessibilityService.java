@@ -200,6 +200,9 @@ public final class BixbyAccessibilityService extends AccessibilityService {
             // misleading fixed script during model warm-up.
             return;
         }
+        // Do not consume a newer caller turn while another offline reply
+        // is still generating. It must remain eligible on the next UI event.
+        if (useModel && generating) return;
         String hash = fingerprint(s.callerText);
         if (hash.equals(lastInboundFingerprint) || hash.equals(lastSentFingerprint)) return;
         lastInboundFingerprint = hash;
