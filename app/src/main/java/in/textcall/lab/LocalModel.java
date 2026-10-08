@@ -40,6 +40,17 @@ public final class LocalModel {
     public static LocalModel get() { return INSTANCE; }
     public boolean isLoaded() { return loaded; }
     public String status() { return status; }
+    /** Lightweight, non-blocking native progress; no model or caller data included. */
+    public String progress() {
+        if (!nativeAvailable) return status;
+        try { return nativeProgress(); }
+        catch (Throwable e) { return "Progress unavailable (" + e.getClass().getSimpleName() + ")"; }
+    }
+    /** Cooperative cancel; native inference checks it after each prefill/decode chunk. */
+    public void cancel() {
+        if (!nativeAvailable) return;
+        try { nativeCancel(); } catch (Throwable ignored) { }
+    }
     public static File modelFile(Context context) {
         return new File(context.getApplicationContext().getFilesDir(), LOCAL_FILE);
     }
@@ -107,9 +118,9 @@ public final class LocalModel {
         serial.execute(() -> {
             long begin = SystemClock.elapsedRealtime();
             String prompt = PromptFormatter.format(owner, facts, rules, history, caller);
-            String response = nativeGenerate(prompt, 64);
+            String response = nativeGenerate(prompt, 48);
             String cleaned = PromptFormatter.clean(response);
-            if (cleaned.isEmpty()) callback.done("", "No usable generated reply", SystemClock.elapsedRealtime() - begin);
+            if (cleaned.isEmpty()) callback.done("", "No usable reply. " + progress(), SystemClock.elapsedRealtime() - begin);
             else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
         });
     }
@@ -120,10 +131,12 @@ public final class LocalModel {
             long begin = SystemClock.elapsedRealtime();
             String answer = nativeGenerate(PromptFormatter.brief(callerPhrases), 110);
             String cleaned = PromptFormatter.clean(answer);
-            if (cleaned.isEmpty()) callback.done("", "Summary unavailable", SystemClock.elapsedRealtime() - begin);
+            if (cleaned.isEmpty()) callback.done("", "Summary unavailable. " + progress(), SystemClock.elapsedRealtime() - begin);
             else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
         });
     }
     private static native String nativeLoad(String absolutePath);
     private static native String nativeGenerate(String prompt, int maxNewTokens);
+    private static native void nativeCancel();
+    private static native String nativeProgress();
 }
