@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Resolve only installed system text-to-speech engines; do not request network or microphone. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
     <!-- No INTERNET, READ_PHONE_STATE, RECORD_AUDIO or call-log permissions. -->
     <application
         android:allowBackup="false"
