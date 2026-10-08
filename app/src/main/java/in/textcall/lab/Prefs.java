@@ -12,6 +12,13 @@ final class Prefs {
     static final String SEND_ID = "send_id";
     static final String STATUS = "status";
     static final String DIAGNOSTICS = "diagnostics";
+    static final String VOICE = "voice_id";
+    static final String STYLE = "voice_style";
+    static final String SPEED = "speech_rate";
+    static final String FLOATING = "floating_panel";
+    static final String PROBE = "diagnostic_enabled";
+    static final String PROFILE_NAME = "profile_name";
+    static final String PROFILE_INFO = "profile_info";
     private static final String SAFE_MIGRATED = "safe_migrated_v2";
 
     private Prefs() { }
