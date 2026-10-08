@@ -611,6 +611,7 @@ public final class MainActivity extends Activity {
                             voice.stop();
                             p.edit().clear().commit();
                             p = Prefs.get(this);
+                            new PrivateBriefStore(this).clear();
                             previewReply = "";
                             render();
                             toast("Local settings reset. Disable Accessibility separately.");
@@ -645,9 +646,16 @@ public final class MainActivity extends Activity {
                 render();
                 return;
             }
+            String warning = Prefs.AUTO_ATTEND.equals(key)
+                    ? "Experimental: this may answer all incoming calls using Bixby if Samsung's EXACT controls are exposed. Your A52s is not validated. Test only with someone you trust."
+                    : Prefs.LIVE_REPLY.equals(key)
+                    ? "Experimental automatic replies: this will SEND locally scripted messages only when caller role and Samsung Send button are both unambiguous. No guarantee on A52s. Avoid sensitive calls."
+                    : Prefs.SAVE_BRIEF.equals(key)
+                    ? "Saves an encrypted category and next action using Android Keystore. No raw transcript, caller name or number is saved."
+                    : "Sensitive Samsung screen access. The Android accessibility service must be enabled separately. No cloud connection.";
             new AlertDialog.Builder(this)
-                    .setTitle("Enable Samsung UI monitoring?")
-                    .setMessage("The service may inspect Samsung's call screen accessibility structure only. It does not record speech, save transcripts, answer or send messages. You can turn it off at any time.")
+                    .setTitle("Confirm experimental permission")
+                    .setMessage(warning)
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Enable", (d, w) -> {
                         p.edit().putBoolean(key, true).apply();
