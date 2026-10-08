@@ -1,3 +1,35 @@
+# CallCompanion v0.6 — Samsung Text Call bridge experiment
+
+**Build status:** GitHub CI validates Java logic and APK compilation. **On-device incoming Jio call automation remains unverified on Samsung A52s 5G.** Do not claim that installation alone gives a working autonomous AI secretary.
+
+## What is implemented
+- One Android app, no PC or Termux needed after installation, no subscription and no API charges.
+- Offline **Talk** mode: opt-in microphone -> strictly on-device Android SpeechRecognizer -> context-aware scripted response -> installed offline Android TTS speaker.
+- A52s Samsung in-call Accessibility only: experimental **Try AI Attend (Bixby)** overlay and opt-in **Automatically try Samsung Text Call**. Uses Samsung exact UI ID `ai_call_floating_button_container` and an accessible Text Call answer confirmation. Does not use generic tap coordinates, dialer replacement or root.
+- Experimental **Auto-reply to confirmed caller text**: local scripted responses, gated on explicit incoming-speaker marking, one visible editable field, one whitelisted Samsung send button, cooldown, max 12 sends. If the A52s One UI provides no speaker labeling or safe send ID, **NO automatic replies are sent**. This is expected fail-closed behavior, not a hidden success.
+- **Encrypted call brief** option: uses Android Keystore AES-GCM; only inferred category, number of recognized turns, and suggested action. **No raw conversation, caller ID, phone number or voice audio saved by our app**. Samsung Phone may independently retain Bixby transcripts.
+- User's public owner instructions affect scripted responses, but there is **no Qwen or other generative language model bundled**. A human-level AI secretary is NOT delivered here.
+
+## Strict privacy controls
+- Every automatic action switch OFF by default. Explicit confirmation in app before enabling.
+- Android accessibility permission is granted/revoked by Android system only. It grants sensitive UI-reading capability; enable only for trusted test calls.
+- No `INTERNET`, `READ_CALL_LOG`, `READ_CONTACTS`, `READ_SMS`, `READ_PHONE_STATE`, `SYSTEM_ALERT_WINDOW`, or `CAPTURE_AUDIO_OUTPUT` permission. `RECORD_AUDIO` is optional for foreground **Talk** tab only, not used on carrier calls.
+- App has no analytics, cloud calls or external AI SDKs. Backups disabled; encrypted local brief can be deleted.
+- Not independently security audited, and Samsung's own Bixby service can process or save call information separately.
+
+## How to test without jeopardizing personal calls
+1. Install `app-debug.apk` from the latest green **Build Android APK** GitHub Actions run. If debug key differs, uninstall old app before install (deletes old settings).
+2. Samsung Phone > Settings > Bixby Text Call > enable/download English voice pack if available. Confirm with trusted caller.
+3. Open **CallCompanion** -> Home -> use **Observe Samsung call UI** plus optional **Floating call shortcut**. Android will require one-time accessibility permission. Leave both auto-attend and auto-reply OFF for the first test.
+4. Get a dummy incoming call from a consenting person. See if floating shortcut is visible and tap **Try AI Attend (Bixby)**. It may fail if Samsung screen controls differ.
+5. In Bixby Text Call ask one dummy enquiry. After call, open **View Samsung bridge diagnostics** to see only structure/role availability. If role marker or whitelisted send button missing, automatic reply is blocked and requires A52s-specific integration, not blindly enabling more permissions.
+6. Only if Android/Samsung bridge is accurately recognized during controlled testing, choose explicit automatic answer/reply toggles. Do NOT enable automation blindly for real private calls.
+7. For encrypted summary, enable **Save encrypted category-only call brief** and read the result on Home approximately 45 seconds after the last Samsung UI event. No promise of appointment, callback or transfer is performed.
+
+**Important blocker:** This build has no direct SIM audio injection or capture; Bixby Text Call depends on Samsung firmware and its own voice-processing/privacy systems. The Github A36 automation reference is not A52s compatibility proof. No reliable zero-cost generic Android method has been proven for unlimited fully conversational cellular-call assistants with no root/server.
+
+## Previous v0.5 notes
+
 # CallCompanion — v0.5 private voice lab (Samsung A52s 5G)
 
 **Current release is a private on-device voice conversation prototype — NOT an autonomous SIM-call agent.**
