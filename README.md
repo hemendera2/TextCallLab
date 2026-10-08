@@ -1,53 +1,58 @@
-# TextCall Lab — Samsung Bixby Text Call (experimental)
+# CallCompanion — Samsung A52s native voice laboratory
 
-**Status: source prototype / unverified on A52s 5G.** Not an installed or tested APK. Does **not** promise natural conversational AI.
+**Current build: v0.4.** A modern native Android UI, a local offline voice catalog/preview and an experimental Samsung call-screen shortcut. **This is not yet an autonomous AI call attendant.** Normal cellular call audio is not available for generic third-party Android apps, and Samsung Bixby Text Call automation has **not** been validated end-to-end on this A52s.
 
-## What it does
+## Functional capabilities
 
-- Runs an Android Accessibility Service **restricted to Samsung in-call UI** (`com.samsung.android.incallui`).
-- After **you manually answer with Samsung Bixby Text Call**, inspects visible accessible UI and records small **local-only** UI diagnostics.
-- Generates a **scripted, deterministic, 100% on-device** response (no paid API, no Internet permission).
-- Can *attempt* typing and clicking SEND if **you explicitly enable auto-send** **and** configure *both* the exact caller-text view ID and exact send-button view ID. **OFF by default.**
-- Does NOT answer normal voice calls, record microphone audio, bypass Samsung OS access restrictions, or install an LLM model.
+| Component | Current reality |
+|---|---|
+| Native home, voice studio, privacy screen and custom launcher icon | Implemented, APK compiled |
+| Installed offline language/voice variants | Enumerated from Android TextToSpeech, network-dependent voices filtered |
+| Voice character | Deep, Natural and Bright pitch presets; TTS voice gender is not reliably provided by Android |
+| Offline response demo | Deterministic, scripted, one-turn keyword responder only; not a generative model |
+| Preview audio | Plays through phone speaker on user action; **not injected into SIM calls** |
+| Floating shortcut over Samsung in-call screen | Experimental opt-in Accessibility overlay; shows preset switch and app shortcut only |
+| Automatic answering, caller dialogue and sending replies | **NOT implemented**; blocked in source |
+| Call transcription availability on this device | **Not verified**; scanner records only structural metadata |
+| Termux needed while using app | No. Termux only used to download/install builds; Android app runs independently once installed |
 
-### Important: Not yet generative AI
+## Privacy/security boundaries
 
-`OfflineResponder.java` uses keyword-based responses; it cannot freely converse like a human. We deliberately validate the Samsung screen bridge **before** adding a local generative model. On an A52s, LLM performance/latency will depend on the installed model and available RAM.
+- No app `INTERNET`, `RECORD_AUDIO`, `READ_CONTACTS`, `READ_SMS`, `READ_CALL_LOG`, `READ_PHONE_STATE` or overlay permissions.
+- Optional Accessibility Service restricted to `com.samsung.android.incallui`. It can see call-screen structure, which is sensitive access. Enable it **only for trusted testing** and turn it off when finished.
+- Call transcript bodies/voice content never saved to local diagnostics by the probe. Diagnostics store only node counts and structural status. **No automatic message sending or control of call accept/end.**
+- Android app backups disabled. Local profile, voice choices, and test diagnostics stay in app-private preferences; app has no network client.
+- Android TTS engines and Samsung's built-in Text Call service are separate components with their own data handling/privacy behaviors. This app's lack of Internet permission is **not** a guarantee about those other apps.
+- This has **not** received an external security audit or penetration test; do not use sensitive real customer calls for experiments.
+- Voice model packs may need downloading through Android's text-to-speech settings. Selecting an installed offline voice avoids relying on an online synthesis voice, but CPU/battery/latency still depend on hardware.
 
-### Critical caution about automated send
+## Install the latest build with only an Android phone
 
-On some Samsung versions, caller and your own replies may share the same view ID. In that case the simple prototype **cannot distinguish the speaker**. **DO NOT enable auto-send.** This is a diagnostic proof of concept, not production call handling. If accessibility node texts/IDs are absent, no reliable solution via this method has been established.
+Existing repo: https://github.com/hemendera2/TextCallLab
 
-## Build free using only your Android phone + GitHub
+1. Use GitHub Actions > **Build Android APK** on the repository; wait until the most recent run is green.
+2. In Termux, while signed in with `gh`: `gh run list -R hemendera2/TextCallLab --limit 3`
+3. Download a **specific successful run**, replacing `RUN_ID`: `mkdir -p ~/storage/downloads/CallCompanion && gh run download RUN_ID -R hemendera2/TextCallLab -n TextCallLab-debug-apk -D ~/storage/downloads/CallCompanion`
+4. In Samsung **My Files**, open `Downloads/CallCompanion/app-debug.apk`. Debug APKs built on separate GitHub-hosted runners may have different signing keys. **Uninstall the older debug APK first** if Android reports a signature/update conflict; this resets local app data.
+5. Start CallCompanion. The home screen, voice studio, and privacy screen work as a normal installed APK **without Termux running**.
+6. For local speaking tests, pick a voice variant available on your phone and tap **Generate & speak locally**. If there are no offline voices, use the Android/Samsung TTS settings link once to install/download a compatible voice.
+7. Only if you knowingly want to test the Samsung in-call panel: manually grant restricted Accessibility access in Android Settings, return to the app, enable **Observe Samsung call UI**, then enable **Floating call shortcut**. With a trusted consenting test caller, use Samsung's own **Bixby Text Call** option. The shortcut may or may not appear on your One UI version; **it does not answer, talk, or type in the call**.
+8. After testing, toggle monitoring off and disable Accessibility Service in Android settings.
 
-No PC is needed for this method, but **internet access to GitHub is needed to compile**. Running the installed APK itself does not require an external AI API.
+## Limitations, verification and next release gates
 
-1. On phone browser, sign in to [GitHub](https://github.com/) and create a **new public repository** named `TextCallLab` (use no real caller data in the repo). Public GitHub Actions on standard hosted runners are free under GitHub's current published rules.
-2. Add/upload **all files and folders** from this project into that repository while preserving directories. A mobile git client that can upload a folder or the GitHub web upload UI in **Desktop site** mode can help. Do not upload a ZIP unchanged as the repository contents; files must be extracted first.
-3. In the repository, open **Actions** → **Build Android APK** → **Run workflow** (a push to main should also trigger it).
-4. Once the build succeeds, open the workflow run → **Artifacts** → download **TextCallLab-debug-apk**. Extract the downloaded artifact ZIP on your Android phone, then install `app-debug.apk`.
-5. If Android blocks sideloaded accessibility permission, open `Settings → Apps → TextCall Lab → ⋮ → Allow restricted settings` (if present). Then go to `Settings → Accessibility → Installed apps → TextCall Lab - Bixby screen access`, enable it yourself.
-6. In TextCall Lab, enable monitoring. **Keep AUTO-SEND OFF.** Ask someone you trust to place a test call, tap Samsung's native **Bixby Text Call**, have the caller say a simple English sentence (supported language varies by device), end the call.
-7. Return to the app, tap **Refresh diagnostics**. Check whether it displayed nodes and text IDs from Samsung's call screen. The app may or may not see the actual caller speech on your Samsung firmware.
-8. Before sharing a screenshot/log with anyone, **redact names, phone numbers, and private caller texts**. Never enable auto-send until caller/assistant message distinction has been independently verified in an actual test.
+**Build green is not proof that the Samsung call-screen shortcut works in a live call.** The user must first confirm whether the Samsung in-call package and UI anchors are exposed. Further work on true autonomous answering requires a permitted telephony interface (which may have service costs), a suitable on-device generative model (hardware-dependent), verified speech recognition/synthesis latency and independent privacy review. None are delivered by this repo today.
 
-## If build fails
+Build CI runs static privacy guards, the deterministic responder tests, Gradle compilation, and uploads a debug APK. Do not claim zero latency, fully human voice, unlimited call handling, or universal Android compatibility.
 
-Read the failure line from Actions and share the error message (not API keys or caller texts). This source has not been built in the current environment; GitHub Actions performs the actual Android compile.
+## Implementation
 
-## Security and consent
+- Java 17; minimum Android API 29; target/compile API 35.
+- Native Android widgets and custom Canvas/vector artwork; no external runtime UI SDKs.
+- No app telemetry, analytics, crash reporter, backend, API tokens, ads or billing.
+- `BixbyAccessibilityService.java`: Samsung UI structural probe; opt-in experimental accessibility overlay.
+- `LocalVoiceEngine.java`: Android TTS, installed offline variants only.
+- `OfflineResponder.java`: deterministic safety-aware scripted response demo.
+- `tools/test-privacy.sh`, `tools/test-local.sh`: static and scripted regression checks.
 
-This experiment contains no `INTERNET`, `RECORD_AUDIO`, `READ_CALL_LOG` or `READ_PHONE_STATE` permissions. Accessibility itself is powerful: grant it only if you trust the code. Use only on your phone, ask trusted callers for consent on tests, and clearly identify the voice as an automated assistant.
-
-This kind of autonomous Accessibility automation can be incompatible with Google Play accessibility policies for non-accessibility tools; this repo is intended as a personal sideloaded experiment, not a Play Store submission.
-
-## Technical details
-
-- Android application ID: `in.textcall.lab`
-- `minSdk 29`, `targetSdk 35`, Java 17, Android Gradle Plugin 8.6.1
-- GitHub Actions builds debug APK on standard Ubuntu hosted runner
-- Source: original code; built to study a Samsung-supported call text workflow rather than bypass cellular call permissions
-
-### Simplest phone-only upload method
-
-Use **Termux** (free, from F-Droid), **git**, and **GitHub CLI (`gh`)**. See `PHONE_ONLY_STEPS.txt` for the commands. This uploads source from your phone into a new public GitHub repo; GitHub Actions produces the APK for you. You never need a PC. The commands need a GitHub login, and mobile network data may be consumed for the build/download.
+© CallCompanion personal prototype. Verify any third-party software/voice licenses before commercial redistribution.
