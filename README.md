@@ -1,3 +1,18 @@
+# CallCompanion v0.8.1 — Qwen CPU responsiveness fix
+
+Fix for v0.8 apparently getting stuck on "Offline Qwen is thinking on CPU…" on Galaxy A52s 5G:
+- llama.cpp now keeps its context and token-batch in memory after loading, instead of recreating them for every utterance.
+- Shared model context is cleared between requests to avoid cross-call data leakage.
+- Lower 1,024-token context, 64-token prefill chunks and maximum 48 output tokens are designed for CPU-only constrained devices.
+- A 35-second cooperative CPU generation budget checks after each prefill/decode step. A single native CPU kernel may exceed the deadline; this is not a hard OS-enforced kill.
+- Talk screen displays live native phase (tokenizing, prefill, generating, failed/timeout) and time elapsed; Stop lets you abandon the UI request and signal the inference kernel.
+- Queued, cancelled requests are dropped rather than silently running after later taps. No network permissions were added.
+- **This does not prove end-to-end inference performance on A52s.** A local model's speed remains device/temperature/RAM dependent; if it cannot produce within a useful latency, compare another GGUF or use the faster deterministic rule flow. No real SIM call testing in GitHub Actions.
+
+## Install after v0.8
+Install APK from newest green Build Android APK GitHub Actions run. Existing signature may differ across debug builds; Android might require uninstalling the old APK first (will erase app-private imported GGUF/settings, but not the original verified file in Downloads). Reimport from Downloads if needed, load it, test a short phrase, and observe the phase/elapsed time. Leave automatic Samsung call replies OFF pending direct A52s UI acceptance.
+
+## Previous notes
 # CallCompanion v0.8 — Offline Qwen3.5 Android AI prototype
 
 **Actual generative AI implementation is included.** This release compiles native arm64 llama.cpp using Android NDK; the user's existing Qwen3.5 0.8B Q4_K_M GGUF is imported on-device with Android's file picker. No server, Termux daemon, API key or INTERNET permission. Import/load/inference on the Samsung A52s and automatic cellular call delivery are **NOT device-tested**.
