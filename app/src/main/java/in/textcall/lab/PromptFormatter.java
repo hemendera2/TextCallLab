@@ -38,6 +38,27 @@ public final class PromptFormatter {
                 .append("<|im_end|>\n<|im_start|>assistant\n");
         return out.toString();
     }
+    /** Offline call-summary prompt. Inputs are ephemeral recognized caller phrases only. */
+    public static String brief(List<String> heard) {
+        StringBuilder b = new StringBuilder();
+        b.append("<|im_start|>system\n");
+        b.append("You are making a PRIVATE after-call secretary brief for the phone owner. ");
+        b.append("Write exactly three short lines: Reason: ...; Priority: ...; Next action: ... . ");
+        b.append("Use facts explicitly stated in the call; if missing write 'Not confirmed'. ");
+        b.append("Mark any inferred advice as suggested, not completed. Never invent appointments. ");
+        b.append("Do not include OTP, PIN, banking info, or private identity fields. ");
+        b.append("Language: Hindi/Hinglish. Keep under 65 words. /no_think");
+        b.append("<|im_end|>\n<|im_start|>user\n");
+        if (heard != null) {
+            int from = Math.max(0, heard.size() - 8);
+            for (int i=from; i<heard.size(); i++) {
+                b.append("Caller statement: ")
+                 .append(escape(limit(heard.get(i), 250))).append("\n");
+            }
+        }
+        b.append("<|im_end|>\n<|im_start|>assistant\n");
+        return b.toString();
+    }
     public static String clean(String generated) {
         if (generated == null) return "";
         String text = generated;
