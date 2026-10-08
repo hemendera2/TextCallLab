@@ -9,6 +9,9 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 /**
  * Samsung Bixby Text Call proof-of-concept.  It NEVER accepts/hangs up a call.
@@ -19,9 +22,11 @@ import java.util.Locale;
 public final class BixbyAccessibilityService extends AccessibilityService {
     private static final String TARGET_PACKAGE = "com.samsung.android.incallui";
     private static final long MIN_SCAN_MS = 650L;
+    // All real call actions disabled until tested and audited on a real device.
+    private static final boolean LIVE_SEND_CERTIFIED = false;
     private long lastScanAt = 0;
-    private String lastProcessedCaller = "";
-    private String lastGeneratedResponse = "";
+    private String lastProcessedCallerDigest = "";
+    private String lastGeneratedResponseDigest = "";
     private long lastStatusAt = 0;
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -53,7 +58,7 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         // Only Samsung's in-call UI is read, never accept calls automatically.
         // Also require an editable input AND visible Text Call / Voice Call indicator.
         boolean seemsTextCall = snap.input != null && snap.containsCallAnchor;
-        String mode = p.getBoolean(Prefs.AUTO_SEND, false) ? "AUTO-SEND" : "DRY RUN";
+        String mode = "PRIVACY SAFE: DRY RUN ONLY";
         String state = "Mode: " + mode + " | Samsung text-call view: " + seemsTextCall
                 + " | Editable: " + (snap.input != null)
                 + " | Caller-ID match: " + (snap.lastCallerNode != null)
@@ -69,8 +74,8 @@ public final class BixbyAccessibilityService extends AccessibilityService {
                 || snap.send == null || snap.lastCallerNode == null) return;
         String caller = text(snap.lastCallerNode);
         if (caller.isEmpty() || caller.length() < 2 || caller.length() > 600
-                || caller.equals(lastProcessedCaller)
-                || caller.equals(lastGeneratedResponse)) return;
+                || fingerprint(caller).equals(lastProcessedCallerDigest)
+                || fingerprint(caller).equals(lastGeneratedResponseDigest)) return;
 
         // Strict safety check: avoids replying to obvious outgoing automated messages.
         String low = caller.toLowerCase(Locale.ROOT);
@@ -78,12 +83,12 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         String answer = OfflineResponder.reply(caller,
                 Prefs.value(p, Prefs.OWNER, ""), Prefs.value(p, Prefs.INSTRUCTIONS, ""));
         if (answer.isEmpty()) return;
-        lastProcessedCaller = caller;
-        lastGeneratedResponse = answer;
+        lastProcessedCallerDigest = fingerprint(caller);
+        lastGeneratedResponseDigest = fingerprint(answer);
 
-        if (!p.getBoolean(Prefs.AUTO_SEND, false)) {
-            Prefs.status(this, "DRY RUN: Draft generated, not sent",
-                    "Caller: " + redacted(caller) + "\nReply: " + answer + "\n\n" + snap.report());
+        if (!LIVE_SEND_CERTIFIED || !p.getBoolean(Prefs.AUTO_SEND, false)) {
+            Prefs.status(this, "DRY RUN: local response generated; not saved or sent",
+                    snap.report());
             return;
         }
 
@@ -96,8 +101,7 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         }
         boolean clicked = snap.send.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         Prefs.status(this, clicked ? "Reply click attempted (VERIFY on call)" : "Reply typed; send click failed",
-                "Caller: " + redacted(caller) + "\nDraft: " + answer
-                        + "\n\nCheck the real call screen.\n\n" + snap.report());
+                snap.report());
     }
 
     private void collect(AccessibilityNodeInfo node, Snapshot snap, int depth) {
@@ -125,8 +129,8 @@ public final class BixbyAccessibilityService extends AccessibilityService {
                 snap.lines.add((node.isEditable() ? "[EDIT] " : "")
                         + (node.isClickable() ? "[CLICK] " : "")
                         + (id == null ? "-" : id) + " | "
-                        + node.getClassName() + " | text=" + redacted(content)
-                        + " | desc=" + redacted(desc));
+                        + node.getClassName() + " | hasText=" + !content.isEmpty()
+                        + " | hasDescription=" + !desc.isEmpty());
             }
         }
         for (int i = 0; i < node.getChildCount() && snap.count < 180; i++) {
@@ -144,11 +148,21 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         return node.getText().toString().trim();
     }
 
-    private static String redacted(String s) {
-        if (s == null) return "";
-        String shortened = s.replace('\n', ' ');
-        if (shortened.length() > 85) shortened = shortened.substring(0, 85) + "...";
-        return shortened.replaceAll("(?<!\\w)\\+?[0-9][0-9 .-]{6,}[0-9](?!\\w)", "[number]");
+    // Prevent holding raw caller transcripts in long-lived service fields.
+    private static String fingerprint(String value) {
+        try {
+            byte[] bytes = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder out = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                int n = bytes[i] & 0xFF;
+                out.append(Character.forDigit(n >>> 4, 16));
+                out.append(Character.forDigit(n & 0x0F, 16));
+            }
+            return out.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return Integer.toHexString(value.hashCode()) + ":" + value.length();
+        }
     }
 
     @Override public void onInterrupt() { }
