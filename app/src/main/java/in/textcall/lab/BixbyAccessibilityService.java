@@ -221,6 +221,14 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         if (s.editables != 1 || s.sendButtons != 1 || s.editor == null || s.sender == null
                 || replies >= MAX_REPLIES || now - lastReplySentAt < COOLDOWN_MS) return;
         if (useModel) {
+            SharedPreferences instructions=Prefs.get(this);
+            String quick=FastReply.respond(s.callerText,
+                    instructions.getString(Prefs.PROFILE_NAME,"Owner"),
+                    conversation.recentTurns());
+            if(!quick.isEmpty()) {
+                if(sendText(s,quick)) conversation.recordExchange(s.callerText,quick);
+                return;
+            }
             if (generating) return;
             generating = true;
             long epoch = generationEpoch;
