@@ -17,11 +17,30 @@ llama_context *context=nullptr;
 llama_batch_ext *batch=nullptr;
 const llama_vocab *vocab=nullptr;
 bool backend_initialized=false;
-constexpr int CONTEXT_TOKENS=1024;
-constexpr int MAX_PROMPT=790;
-constexpr int MAX_OUTPUT=48;
-constexpr auto MAX_CPU_TIME=std::chrono::seconds(35);
+constexpr int CONTEXT_TOKENS=640;
+constexpr int MAX_PROMPT=520;
+constexpr int MAX_OUTPUT=32;
+constexpr auto MAX_CPU_TIME=std::chrono::seconds(12);
+std::atomic<int64_t> abort_deadline_ns{0};
+std::atomic<int> cpu_graph_stage{0};
 using Clock=std::chrono::steady_clock;
+
+int64_t now_ns() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        Clock::now().time_since_epoch()).count();
+}
+// llama.cpp's CPU graph invokes this DURING llama_process, not merely
+// between batch calls. Without it a long first batch ignored our timeout.
+bool abort_cpu_graph(void *) {
+    if (cancel_requested.load(std::memory_order_relaxed)) {
+        phase.store(5); return true;
+    }
+    const int64_t deadline=abort_deadline_ns.load(std::memory_order_relaxed);
+    if (deadline>0 && now_ns()>deadline) {
+        phase.store(4); return true;
+    }
+    return false;
+}
 
 bool terminated(Clock::time_point start) {
     if (cancel_requested.load()) { phase.store(5); return true; }
@@ -51,6 +70,9 @@ std::string run(const std::string& prompt,int requested_tokens) {
     prefill_total.store(0);
     decoded_tokens.store(0);
     const auto began=Clock::now();
+    abort_deadline_ns.store(now_ns()+
+         std::chrono::duration_cast<std::chrono::nanoseconds>(MAX_CPU_TIME).count());
+    cpu_graph_stage.store(0);
 
     // Clear recurrent / KV memory between requests: no bleed across callers.
     llama_memory_t mem=llama_get_memory(context);
@@ -65,12 +87,14 @@ std::string run(const std::string& prompt,int requested_tokens) {
     phase.store(2);
     int cursor=0;
     // Smaller prefill chunks for cooperative cancellation and progress.
-    for(int offset=0;offset<n;offset+=64) {
+    for(int offset=0;offset<n;offset+=16) {
         if(terminated(began)) return "";
-        int size=std::min(64,n-offset);
+        int size=std::min(16,n-offset);
+        cpu_graph_stage.store(size);
         if(!set_batch(tokens.data()+offset,size,offset,offset+size==n) ||
            llama_process(context,LLAMA_PROCESS_TYPE_DECODE,batch)!=0) {
-            phase.store(6); return "";
+            if(phase.load()!=4 && phase.load()!=5) phase.store(6);
+            return "";
         }
         cursor+=size;
         prefill_done.store(cursor);
@@ -101,7 +125,7 @@ std::string run(const std::string& prompt,int requested_tokens) {
         if(cursor>=CONTEXT_TOKENS-1) break;
         if(!set_batch(&next,1,cursor,true) ||
            llama_process(context,LLAMA_PROCESS_TYPE_DECODE,batch)!=0) {
-            phase.store(6);
+            if(phase.load()!=4 && phase.load()!=5) phase.store(6);
             out.clear();
             break;
         }
@@ -134,8 +158,10 @@ Java_in_textcall_lab_LocalModel_nativeLoad(JNIEnv *env,jclass,jstring path) {
     if(!vocab) return env->NewStringUTF("GGUF tokenizer missing");
     llama_context_params cp=llama_context_default_params();
     cp.n_ctx=CONTEXT_TOKENS;
-    cp.n_batch=128;
-    cp.n_ubatch=64;
+    cp.n_batch=64;
+    cp.n_ubatch=16;
+    cp.abort_callback=abort_cpu_graph;
+    cp.abort_callback_data=nullptr;
     cp.n_threads=4;
     cp.n_threads_batch=4;
     cp.no_perf=true;
@@ -159,6 +185,18 @@ Java_in_textcall_lab_LocalModel_nativeGenerate(JNIEnv *env,jclass,jstring prompt
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_in_textcall_lab_LocalModel_nativeUnload(JNIEnv *,jclass) {
+    cancel_requested.store(true);
+    std::lock_guard<std::mutex> lock(gate);
+    if(batch) { llama_batch_ext_free(batch); batch=nullptr; }
+    if(context) { llama_free(context); context=nullptr; }
+    if(model) { llama_model_free(model); model=nullptr; }
+    vocab=nullptr;
+    phase.store(0);
+    abort_deadline_ns.store(0);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_in_textcall_lab_LocalModel_nativeCancel(JNIEnv *,jclass) {
     cancel_requested.store(true);
 }
@@ -168,10 +206,11 @@ Java_in_textcall_lab_LocalModel_nativeProgress(JNIEnv *env,jclass) {
     std::string state;
     switch(phase.load()) {
         case 1: state="Tokenizing prompt"; break;
-        case 2: state="Prefill "+std::to_string(prefill_done.load())+"/"+
+        case 2: state="Prefill (batch "+std::to_string(cpu_graph_stage.load())+
+                       ") "+std::to_string(prefill_done.load())+"/"+
                        std::to_string(prefill_total.load())+" tokens"; break;
         case 3: state="Generating "+std::to_string(decoded_tokens.load())+" reply tokens"; break;
-        case 4: state="Inference timed out after 35 seconds"; break;
+        case 4: state="CPU budget exceeded (12s)"; break;
         case 5: state="Inference cancelled"; break;
         case 6: state="Inference failed (see model/support)"; break;
         default: state="Model idle"; break;
