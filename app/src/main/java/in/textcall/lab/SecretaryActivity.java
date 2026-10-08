@@ -326,7 +326,7 @@ public final class SecretaryActivity extends Activity {
     private void showTalk() {
         section(frame,"TALK TO KALLVO","A conversation, not a script.");
         pad(frame,7);
-        caption(frame,"Voice and AI run on your phone. No call is placed.");
+        caption(frame,"Hindi-first offline practice. No SIM call is placed.");
         pad(frame,16);
 
         if(!LocalModel.get().isLoaded()) {
@@ -513,6 +513,18 @@ public final class SecretaryActivity extends Activity {
         }
         identity.addView(select);
         pad(identity,11);
+        String chosenId=prefs.getString(Prefs.VOICE,"");
+        if(chosenId.toLowerCase(Locale.ROOT).contains("supertonic")
+                && TTS_APP.equals(voice.activeEngine())) {
+            LinearLayout warning=vertical();
+            warning.setPadding(dp(12),dp(11),dp(12),dp(11));
+            warning.setBackground(shape(Color.rgb(255,245,229),12,0));
+            warning.addView(text("Supertonic external-app compatibility is unverified",13,INK,true));
+            pad(warning,5);
+            caption(warning,"A voice can appear in this list without VoxSherpa's Android system TTS service supporting its synthesis. Test it directly in VoxSherpa Generate. If it works there but stays silent here, choose another voice engine/model for KALLVO.");
+            identity.addView(warning);
+            pad(identity,11);
+        }
         List<Voice> voices=voice.voices();
         int visible=0;
         for(Voice v:voices) {
