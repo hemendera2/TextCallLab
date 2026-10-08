@@ -13,45 +13,45 @@ public final class FastReply {
         if (spoken == null) return "";
         String t = spoken.toLowerCase(Locale.ROOT).trim();
         if (t.length() < 2) return "";
-        boolean hindi = t.matches(".*[\\u0900-\\u097f].*");
+        boolean hindi = HindiLanguage.likelyHindi(spoken);
         if (any(t,"otp","password","pin number","cvv","ओटीपी","पासवर्ड","पिन बताओ")) {
             return hindi
                 ? "कृपया ओटीपी, पिन या बैंक की निजी जानकारी साझा न करें।"
-                : "Kripya OTP, PIN ya bank ki private details share mat kijiye.";
+                : "Please do not share your OTP, PIN or private banking details.";
         }
         if (any(t,"emergency","ambulance","heart attack","accident","इमरजेंसी","एम्बुलेंस","दुर्घटना")) {
             return hindi
                 ? "यह आपातकाल हो सकता है। कृपया तुरंत स्थानीय इमरजेंसी नंबर पर कॉल करें।"
-                : "Yeh emergency ho sakti hai. Kripya turant local emergency service ko call karein.";
+                : "This may be an emergency. Please contact local emergency services immediately.";
         }
-        if (any(t,"meeting","appointment","booking","milna","mulaqat","मुलाकात","मीटिंग","अपॉइंटमेंट")) {
+        if (any(t,"meeting","appointment","booking","milna","mulaqat","मुलाकात","मीटिंग","अपॉइंटमेंट","मिलना","मिलना है","समय बताइए")) {
             return hindi
                 ? "किस दिन और कितने बजे मिलना चाहेंगे? अभी मैं बुकिंग कन्फर्म नहीं कर सकता।"
-                : "Ji, kis din aur kitne baje milna chahenge? Main abhi booking confirm nahi kar sakta.";
+                : "What day and time would you prefer? I cannot confirm an appointment yet.";
         }
-        if (any(t,"price","charges","rate kya","kitne paise","fees","कितने पैसे","कीमत","रेट क्या")) {
+        if (any(t,"price","charges","rate kya","kitne paise","fees","कितने पैसे","कीमत","रेट क्या","कितना शुल्क")) {
             return hindi
                 ? "किस सर्विस की कीमत पूछ रहे हैं? बिना पक्की जानकारी के रेट नहीं बता सकता।"
-                : "Kis service ka rate pooch rahe hain? Main bina verified price ke amount nahi bataunga.";
+                : "Which service do you mean? I don't have a verified price yet.";
         }
         if (any(t,"callback","call back","wapas call","वापस कॉल","फिर फोन")) {
             return hindi
                 ? "कृपया अपनी रिक्वेस्ट बता दें। कॉल-बैक का वादा मालिक की मंजूरी के बिना नहीं कर सकता।"
-                : "Ji, apni request bataiye. Main bina owner confirmation callback promise nahi kar sakta.";
+                : "Please tell me your request. I can't promise a callback without the owner's confirmation.";
         }
         if (any(t,"kaun bol","who are you","aap kaun","कौन बोल","आप कौन")) {
             String person = owner == null || owner.trim().isEmpty() ? "owner" : owner.trim();
             if (person.length() > 50) person=person.substring(0,50);
             return hindi
                 ? "मैं एक ऑटोमेटेड एआई सेक्रेटरी हूँ। आप किस बारे में बात करना चाहते हैं?"
-                : "Main " + person + " ka automated AI secretary hoon. Batayiye kis kaam se call kiya?";
+                : "I'm " + person + "'s automated AI secretary. How can I help?";
         }
         // Don't intercept complex greetings with meaningful additional requests.
         if (t.matches("^(namaste|hello|hi|hey|नमस्ते|हैलो)[!.,? ]*$")) {
             int prior = history == null ? 0 : history.size();
             return hindi
                 ? (prior>0?"जी, मैं सुन रहा हूँ। बताइए।":"नमस्ते! मैं एआई सेक्रेटरी हूँ। कैसे मदद करूँ?")
-                : (prior>0?"Ji, main sun raha hoon. Batayiye.":"Namaste! Main AI secretary hoon. Kaisi madad kar sakta hoon?");
+                : (prior>0?"I'm listening. Please go ahead.":"Hello! I'm an automated AI secretary. How can I help?");
         }
         return "";
     }
