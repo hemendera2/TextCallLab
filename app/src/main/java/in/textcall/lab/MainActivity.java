@@ -54,6 +54,8 @@ public final class MainActivity extends Activity {
     private String talkStatus = "Ready for a new private voice session.";
     private TextView talkStatusView;
     private final int REQUEST_MIC = 4107;
+    private final int REQUEST_MODEL = 4208;
+    private long talkEpoch = 0L;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -234,11 +236,44 @@ public final class MainActivity extends Activity {
         truth.addView(statusRow("Offline speech preview", voiceInitialized ? "Available with installed voice" : "Voice engine unavailable / loading", voiceInitialized));
         truth.addView(statusRow("On-device voice conversation", "Talk tab: experimental offline STT + rules + TTS", true));
         truth.addView(statusRow("Samsung call automation", "Experimental, A52s live test pending", false));
-        truth.addView(statusRow("Offline generative model", "Not installed — scripted replies only", false));
+        truth.addView(statusRow("Offline generative model", LocalModel.get().isLoaded()
+                ? "Loaded: llama.cpp local inference" : "Import/load Qwen GGUF in Talk", LocalModel.get().isLoaded()));
         body.addView(truth);
     }
 
     private void showTalk() {
+        LinearLayout model = card();
+        model.addView(text("LOCAL AI BRAIN · QWEN GGUF", 11, BLUE, true));
+        space(model, 7);
+        model.addView(text(LocalModel.get().isLoaded()
+                ? "Offline AI model is READY"
+                : LocalModel.isImported(this) ? "GGUF imported • tap Load" : "Import your downloaded GGUF", 20, NAVY, true));
+        space(model, 5);
+        TextView modelStatus = text(LocalModel.get().status(), 12, SUB, false);
+        model.addView(modelStatus);
+        space(model, 8);
+        model.addView(action("1 · Choose downloaded GGUF", Color.rgb(235,243,255), BLUE, () -> {
+            if (LocalModel.get().isLoaded()) { toast("Model already loaded. Restart app to replace it."); return; }
+            Intent file = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            file.setType("*/*");
+            file.addCategory(Intent.CATEGORY_OPENABLE);
+            file.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(file, REQUEST_MODEL);
+        }));
+        space(model, 7);
+        model.addView(action("2 · Load offline AI into memory", BLUE, Color.WHITE, () -> {
+            modelStatus.setText("Loading may take time on this device. Please wait…");
+            LocalModel.get().load(this, (ok, msg) -> runOnUiThread(() -> {
+                modelStatus.setText(msg);
+                toast(msg);
+                render();
+            }));
+        }));
+        space(model, 7);
+        model.addView(text("Your 553 MB GGUF was downloaded to Downloads/CallCompanion/models. Choose that file. Import copies it ONCE into private app storage (about 553 MB extra); no network. Replies may take several seconds or longer on A52s.", 12, SUB, false));
+        body.addView(model);
+        space(body, 14);
+
         body.addView(text("Talk to your assistant", 27, NAVY, true));
         body.addView(text("Local conversation lab: you speak into THIS phone's microphone; it answers on the speaker. It does NOT hear or speak inside an existing SIM call.", 13, SUB, false));
         space(body, 14);
@@ -280,10 +315,10 @@ public final class MainActivity extends Activity {
         sessionCard.addView(text("PRIVATE SESSION", 11, BLUE, true));
         space(sessionCard, 7);
         sessionCard.addView(text("Conversation memory", 19, NAVY, true));
-        sessionCard.addView(text("Current topic and up to 6 recent exchanges are held in RAM until the session ends. The reply logic is rules-based, not a generative LLM.", 12, SUB, false));
+        sessionCard.addView(text("Current topic and up to 6 recent exchanges are held in RAM until the session ends. When GGUF is loaded, replies come from the offline AI model; otherwise scripted fallback is used.", 12, SUB, false));
         space(sessionCard, 10);
         List<String> turns = session.recentTurns();
-        if (turns.isEmpty()) sessionCard.addView(text("No turns yet. Ask about services, meeting, price, callback, or speak a greeting.", 13, SUB, false));
+        if (turns.isEmpty()) sessionCard.addView(text("No turns yet. Load Qwen and ask a natural Hindi/Hinglish question, or try a typed sample.", 13, SUB, false));
         else for (String t : turns) {
             boolean assistant = t.startsWith("Assistant:");
             TextView bubble = text(t, 13, assistant ? BLUE : NAVY, false);
@@ -320,6 +355,7 @@ public final class MainActivity extends Activity {
     private void stopTalk() {
         autoConversation = false;
         pendingMicStart = false;
+        ++talkEpoch;
         if (inputSpeech != null) inputSpeech.stop();
         if (voice != null) voice.stop();
         setTalkStatus("Session paused. Microphone off.");
@@ -367,17 +403,53 @@ public final class MainActivity extends Activity {
     }
     private void processTalk(String phrase) {
         inputSpeech.stop();
-        String answer = session.respond(phrase);
-        if (answer.isEmpty()) return;
-        setTalkStatus("Reply generated locally. Speaking now…");
-        render();
+        if (LocalModel.get().isLoaded()) {
+            final long epoch = ++talkEpoch;
+            setTalkStatus("Offline Qwen is thinking on CPU…");
+            final List<String> history = session.recentTurns();
+            LocalModel.get().reply(p.getString(Prefs.PROFILE_NAME, "Owner"),
+                    p.getString(Prefs.PROFILE_INFO, ""),
+                    p.getString(Prefs.PROFILE_RULES, ""),
+                    history, phrase, (reply, error, elapsed) -> runOnUiThread(() -> {
+                        if (epoch != talkEpoch || currentTab != 1 || !foreground) return;
+                        if (reply.isEmpty()) {
+                            autoConversation = false;
+                            setTalkStatus("Offline model returned no reply: " + error);
+                            return;
+                        }
+                        session.recordExchange(phrase, reply);
+                        setTalkStatus("Qwen generated reply in " + elapsed + "ms. Speaking…");
+                        render();
+                        speakTalkReply(reply);
+                    }));
+        } else {
+            String answer = session.respond(phrase);
+            if (answer.isEmpty()) return;
+            setTalkStatus("Scripted reply generated; load GGUF for real AI.");
+            render();
+            speakTalkReply(answer);
+        }
+    }
+    private void speakTalkReply(String answer) {
         boolean started = voice.speak(answer, () -> {
             setTalkStatus("Reply finished.");
             if (autoConversation && foreground && currentTab == 1) startMic();
         });
         if (!started) {
             autoConversation = false;
-            setTalkStatus("Reply generated, but no installed offline voice available. Choose one in Voices.");
+            setTalkStatus("No local TTS voice available. Install/select one in Voices.");
+        }
+    }
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == REQUEST_MODEL && result == RESULT_OK && data != null && data.getData() != null) {
+            final android.net.Uri uri = data.getData();
+            setTalkStatus("Importing GGUF to app-private storage…");
+            LocalModel.get().importUri(this, uri, (ok, status) -> runOnUiThread(() -> {
+                setTalkStatus(status);
+                render();
+                toast(status);
+            }));
         }
     }
 
@@ -746,6 +818,7 @@ public final class MainActivity extends Activity {
     private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + .5f); }
     @Override protected void onPause() {
         foreground = false;
+        ++talkEpoch;
         if (inputSpeech != null) inputSpeech.stop();
         autoConversation = false;
         super.onPause();
