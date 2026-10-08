@@ -21,6 +21,8 @@ import android.widget.TextView;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Samsung-only, opt-in live Text Call automation experiment.
@@ -51,6 +53,8 @@ public final class BixbyAccessibilityService extends AccessibilityService {
     private int callerTurns;
     private int replies;
     private String intent = "General enquiry";
+    private final List<String> callerPhrases = new ArrayList<>();
+    private long summaryEpoch;
     private ConversationEngine conversation;
     private boolean inTextCall;
     private boolean briefCommitted;
@@ -207,6 +211,9 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         if (hash.equals(lastInboundFingerprint) || hash.equals(lastSentFingerprint)) return;
         lastInboundFingerprint = hash;
         callerTurns++;
+        callerPhrases.add(s.callerText.length() > 300
+                ? s.callerText.substring(0, 300) : s.callerText);
+        if (callerPhrases.size() > 8) callerPhrases.remove(0);
         String category = CallTurnGuard.category(s.callerText);
         if ("Urgent".equals(category) || "General enquiry".equals(intent)) intent = category;
 
@@ -371,11 +378,29 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         briefCommitted = true;
         SharedPreferences p = Prefs.get(this);
         if (p.getBoolean(Prefs.SAVE_BRIEF, false) && callerTurns > 0) {
-            boolean ok = new PrivateBriefStore(this).save(intent,
-                    CallTurnGuard.followUp(intent), callerTurns);
-            Prefs.status(this, ok ? "Encrypted call brief saved" : "Could not encrypt call brief",
-                    "Summary contains only category, follow-up and turn count; no raw transcript.");
+            final String kind = intent;
+            final String action = CallTurnGuard.followUp(kind);
+            final int heard = callerTurns;
+            final List<String> snapshot = new ArrayList<>(callerPhrases);
+            final long epoch = ++summaryEpoch;
+            PrivateBriefStore store = new PrivateBriefStore(this);
+            boolean saved = store.save(kind, action, heard);
+            Prefs.status(this, saved ? "Encrypted call brief saved" : "Could not encrypt call brief",
+                    "Topic and suggested next action saved. No raw transcript/audio is persisted.");
+            if (saved && LocalModel.get().isLoaded() && !snapshot.isEmpty()
+                    && p.getBoolean(Prefs.USE_LLM, false)) {
+                LocalModel.get().summarize(snapshot, (summary, error, duration) -> handler.post(() -> {
+                    if (epoch != summaryEpoch || summary.isEmpty()
+                            || !Prefs.get(this).getBoolean(Prefs.SAVE_BRIEF, false)) return;
+                    boolean success = new PrivateBriefStore(this).save(kind, action, heard, summary);
+                    Prefs.status(this, success ? "Encrypted AI secretary brief saved"
+                                     : "Unable to save encrypted AI brief",
+                            "Summary generated on device in " + duration
+                                    + "ms, may contain sensitive derived details. Verify before acting.");
+                }));
+            }
         }
+        callerPhrases.clear();
         conversation = null;
         inTextCall = false;
         callerTurns = 0;
