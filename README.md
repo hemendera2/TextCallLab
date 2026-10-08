@@ -1,3 +1,33 @@
+# CallCompanion v0.8 — Offline Qwen3.5 Android AI prototype
+
+**Actual generative AI implementation is included.** This release compiles native arm64 llama.cpp using Android NDK; the user's existing Qwen3.5 0.8B Q4_K_M GGUF is imported on-device with Android's file picker. No server, Termux daemon, API key or INTERNET permission. Import/load/inference on the Samsung A52s and automatic cellular call delivery are **NOT device-tested**.
+
+## Install and load downloaded GGUF
+1. Get the newest **successful** Android APK artifact from this repository's Build Android APK GitHub Action. Debug APK is arm64 only (Galaxy A52s supports arm64).
+2. Install APK. If Android reports signature mismatch with old debug APK, uninstall earlier CallCompanion first (loses old local settings). Keep the original downloaded GGUF in Downloads.
+3. In **Talk** choose **1 · Choose downloaded GGUF**. Navigate **Downloads → CallCompanion → models → Qwen3.5-0.8B-Q4_K_M.gguf**.
+4. Wait for a background **copy to app-private storage**, roughly 553 MB additional storage. This is a one-time import, not an Internet download.
+5. Tap **2 · Load offline AI into memory**. Wait for a success message; model load can take several seconds and inference performance depends on RAM/CPU.
+6. Type a short Hindi/Hinglish phrase in Talk and tap Send; if TTS offline voice installed, answer is spoken locally. Tap microphone only if Android has an on-device recognizer installed and permission granted. With model not loaded, app explicitly falls back to earlier limited scripted replies.
+7. Optional owner instructions and **public** facts are edited in Privacy. Never enter secrets.
+8. Termux may be closed. Model is loaded by the Android native library, not a localhost server.
+
+## Call path and privacy
+- **Samsung Bixby Text Call integration is experimental and unverified on the A52s.** A call is NOT guaranteed to be answered, caller transcript readable, or Bixby to speak generated replies.
+- In Home: enable Samsung screen observation after manually granting Android Accessibility permissions, then test floating **AI Attend** with a consenting dummy caller. Keep auto-reply/auto-attend OFF until on-device diagnostics demonstrate the needed native controls.
+- The **Use OFFLINE Qwen instead of scripts on calls** preference is independent and OFF by default. It generates Bixby replies on a separate worker and re-checks current caller text and unique Send button before attempting submission. If native Bixby controls differ, nothing is sent.
+- **Real-time latency cannot be predicted from build success.** CPU prefill and generation of up to 64 tokens can take many seconds; no guaranteed 2–4 second replies.
+- Optional encrypted **secretary brief** stores topic, number of turns and next action using Android Keystore AES-GCM. When local Qwen is loaded and selected, it may also store an AI-generated reason/priority/next action summary. This summary can contain private *derived* information; it stays encrypted on-device, can be erased via Home, and should be verified for hallucinations. Caller audio, raw transcript and caller number are not stored by this app. Samsung Text Call has its own separate data handling.
+- Apps including ours must not collect caller OTP/password/payment secrets; AI is instructed to avoid committing to appointments or callback promises. Small models still hallucinate, so use only for consenting test calls until validated.
+- No `INTERNET`, `READ_CALL_LOG`, `READ_CONTACTS`, `READ_SMS`, `READ_PHONE_STATE`, or `CAPTURE_AUDIO_OUTPUT` permissions. `RECORD_AUDIO` is only requested for voluntary foreground Talk-mode microphone input.
+
+## Native build provenance
+- Android arm64-v8a, NDK 27.2.12479018, CMake 3.22.1.
+- Pinned upstream `ggml-org/llama.cpp` commit: `c35b66744f13cb0dcc476af063e112122eee9355`. The CI workflow verifies the commit hash. License (MIT) remains with the upstream source. No upstream native sources are committed into this repository.
+- Build and static/unit tests in `.github/workflows/build-apk.yml`; **no real-phone generation performance or live-call acceptance tests** run in GitHub Actions.
+
+## Previous release notes
+
 # CallCompanion v0.7 — Samsung Text Call bridge experiment
 
 **Build status:** GitHub CI validates Java logic and APK compilation. **On-device incoming Jio call automation remains unverified on Samsung A52s 5G.** Do not claim that installation alone gives a working autonomous AI secretary.
