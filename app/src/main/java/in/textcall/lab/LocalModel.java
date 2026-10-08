@@ -113,6 +113,17 @@ public final class LocalModel {
             else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
         });
     }
+    /** Summarizes caller phrases on-device, never uploads them. */
+    public void summarize(List<String> callerPhrases, TextCallback callback) {
+        if (!loaded) { callback.done("", "Model not loaded", 0); return; }
+        serial.execute(() -> {
+            long begin = SystemClock.elapsedRealtime();
+            String answer = nativeGenerate(PromptFormatter.brief(callerPhrases), 110);
+            String cleaned = PromptFormatter.clean(answer);
+            if (cleaned.isEmpty()) callback.done("", "Summary unavailable", SystemClock.elapsedRealtime() - begin);
+            else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
+        });
+    }
     private static native String nativeLoad(String absolutePath);
     private static native String nativeGenerate(String prompt, int maxNewTokens);
 }
