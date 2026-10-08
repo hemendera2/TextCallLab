@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -16,180 +17,379 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Locale;
 
 /**
- * Samsung in-call UI-only accessibility probe plus an optional user-operated panel.
- * Never reads or stores caller speech, never records, accepts, replies to or hangs up calls.
- * Floating panel is NOT an AI connected to the caller. It changes only local preferences.
+ * Samsung-only, opt-in live Text Call automation experiment.
+ * Controls only unique, exact/whitelisted UI elements, never captures SIM audio.
+ * The One UI A52s layout has NOT been validated; unmapped layouts fail closed.
+ * No raw caller texts/numbers are logged, saved or sent over a network.
  */
 public final class BixbyAccessibilityService extends AccessibilityService {
-    private static final String TARGET_PACKAGE = "com.samsung.android.incallui";
-    private static final boolean LIVE_SEND_CERTIFIED = false;
+    private static final String SAMSUNG = "com.samsung.android.incallui";
+    private static final String FLOATING_BUTTON = SAMSUNG + ":id/ai_call_floating_button_container";
+    private static final long POLL_MS = 160L;
+    private static final long COOLDOWN_MS = 3600L;
+    private static final int MAX_REPLIES = 12;
+
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private WindowManager windowManager;
+    private WindowManager manager;
     private LinearLayout panel;
-    private long lastScanAt;
-    private long lastStatusAt;
-    private long panelExpiryAt;
     private boolean dismissed;
+    private long nextScan;
+    private long nextStatus;
+    private long lastCallEvent;
+    private long autoWindowEnd;
+    private long confirmUntil;
+    private long lastAnswerAttempt;
+    private long lastReplySentAt;
+    private String lastInboundFingerprint = "";
+    private String lastSentFingerprint = "";
+    private int callerTurns;
+    private int replies;
+    private String intent = "General enquiry";
+    private ConversationEngine conversation;
+    private boolean inTextCall;
+    private boolean briefCommitted;
+
+    private final Runnable poll = new Runnable() {
+        @Override public void run() {
+            if (SystemClock.elapsedRealtime() > autoWindowEnd) return;
+            if (!Prefs.get(BixbyAccessibilityService.this).getBoolean(Prefs.ENABLED, false)) return;
+            inspect(SystemClock.elapsedRealtime());
+            handler.postDelayed(this, POLL_MS);
+        }
+    };
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (event == null || event.getPackageName() == null) return;
-        if (!TARGET_PACKAGE.contentEquals(event.getPackageName())) return;
-        SharedPreferences prefs = Prefs.get(this);
-        if (!prefs.getBoolean(Prefs.ENABLED, false)) {
+        if (event == null || event.getPackageName() == null
+                || !SAMSUNG.contentEquals(event.getPackageName())) return;
+        SharedPreferences p = Prefs.get(this);
+        if (!p.getBoolean(Prefs.ENABLED, false)) {
             removePanel();
             return;
         }
         long now = SystemClock.elapsedRealtime();
-        if (now - lastScanAt < 650) return;
-        lastScanAt = now;
+        lastCallEvent = now;
+        if (now < nextScan) return;
+        nextScan = now + 220L;
+        inspect(now);
+    }
 
+    private void inspect(long now) {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null || root.getPackageName() == null
-                || !TARGET_PACKAGE.contentEquals(root.getPackageName())) return;
+                || !SAMSUNG.contentEquals(root.getPackageName())) return;
 
-        Scan result = new Scan();
-        scan(root, result, 0);
-        if (now - lastStatusAt > 1300) {
-            Prefs.status(this, "Samsung UI detected • screen probe only • no call control",
-                    "Samsung package: " + TARGET_PACKAGE + "\nNodes: " + result.nodes
-                    + "\nEditable fields: " + result.editable
-                    + "\nClickable elements: " + result.clickable
-                    + "\nRecognized call controls: " + result.callAnchor
-                    + "\nRaw caller content: NEVER stored"
-                    + "\nAuto-send: LOCKED");
-            lastStatusAt = now;
+        Snapshot snapshot = new Snapshot();
+        scan(root, snapshot, 0, false);
+        if (!snapshot.relevant()) return;
+
+        if (snapshot.inCall && snapshot.editables == 1) {
+            inTextCall = true;
+            briefCommitted = false;
+            if (conversation == null) {
+                SharedPreferences settings = Prefs.get(this);
+                conversation = new ConversationEngine(
+                    settings.getString(Prefs.PROFILE_NAME, "Owner"),
+                    settings.getString(Prefs.PROFILE_INFO, ""),
+                    settings.getString(Prefs.PROFILE_RULES, ""));
+            }
         }
-        if (result.callAnchor && prefs.getBoolean(Prefs.FLOATING, false) && !dismissed) {
-            panelExpiryAt = now + 18000L;
-            if (panel == null) showPanel();
-            scheduleExpiry();
-        } else if (!prefs.getBoolean(Prefs.FLOATING, false)) {
+
+        SharedPreferences p = Prefs.get(this);
+        if (p.getBoolean(Prefs.FLOATING, false) && !dismissed) showPanel();
+        else if (!p.getBoolean(Prefs.FLOATING, false)) removePanel();
+
+        if (now > nextStatus) {
+            String state = "Samsung call UI • Text mode: " + inTextCall
+                    + " • Incoming role-labeled bubbles: " + snapshot.inbound
+                    + " • Editable: " + snapshot.editables
+                    + " • Exact send buttons: " + snapshot.sendButtons
+                    + " • Replies attempted: " + replies;
+            String diag = "Samsung in-call UI only\n"
+                    + "Text Call control detected: " + (snapshot.textCallButton != null)
+                    + "\nText Call confirmation detected: " + (snapshot.textCallConfirm != null)
+                    + "\nCaller speaker-marker detected: " + (snapshot.inbound > 0)
+                    + "\nReply field detected: " + (snapshot.editables == 1)
+                    + "\nWhitelisted send button detected: " + (snapshot.sendButtons == 1)
+                    + "\nAI reply opt-in: " + p.getBoolean(Prefs.LIVE_REPLY, false)
+                    + "\nAutomatic answer opt-in: " + p.getBoolean(Prefs.AUTO_ATTEND, false)
+                    + "\nRaw transcript/number: NOT saved\n"
+                    + "Unknown controls are never clicked.";
+            Prefs.status(this, state, diag);
+            nextStatus = now + 1400L;
+        }
+
+        if (p.getBoolean(Prefs.AUTO_ATTEND, false) || now < autoWindowEnd) {
+            tryBeginTextCall(snapshot, now);
+        }
+        if (inTextCall && p.getBoolean(Prefs.LIVE_REPLY, false)) {
+            tryReply(snapshot, now);
+        }
+        handler.removeCallbacks(expire);
+        handler.postDelayed(expire, 45000L);
+    }
+
+    private void tryBeginTextCall(Snapshot s, long now) {
+        if (inTextCall) return;
+        if (confirmUntil > now) {
+            if (s.textCallConfirm != null) {
+                if (click(s.textCallConfirm)) {
+                    confirmUntil = 0;
+                    autoWindowEnd = 0;
+                    Prefs.status(this, "Text Call accept action attempted — verify Samsung screen",
+                            "No caller text, phone number or audio saved.");
+                }
+            }
+            return;
+        }
+        if (s.textCallButton == null || !s.incomingScreen
+                || now - lastAnswerAttempt < 5000L) return;
+        lastAnswerAttempt = now;
+        if (click(s.textCallButton)) {
+            confirmUntil = now + 5500L;
+            autoWindowEnd = now + 5700L;
+            handler.removeCallbacks(poll);
+            handler.postDelayed(poll, POLL_MS);
+        }
+    }
+
+    private void tryReply(Snapshot s, long now) {
+        // Source roles, destination and call context MUST ALL be unambiguous.
+        if (!s.inCall || s.editables != 1 || s.sendButtons != 1 || s.inbound == 0
+                || s.callerText.isEmpty() || conversation == null || replies >= MAX_REPLIES
+                || now - lastReplySentAt < COOLDOWN_MS) return;
+        String hash = fingerprint(s.callerText);
+        if (hash.equals(lastInboundFingerprint) || hash.equals(lastSentFingerprint)) return;
+        lastInboundFingerprint = hash;
+        callerTurns++;
+        String category = CallTurnGuard.category(s.callerText);
+        if ("Urgent".equals(category) || "General enquiry".equals(intent)) intent = category;
+        String answer = conversation.respond(s.callerText);
+        if (answer.isEmpty()) return;
+        // The reply is generated locally from public owner instructions.
+        // Require a safe native destination and a uniquely matched Send button.
+        if (s.editor == null || s.sender == null) return;
+        Bundle b = new Bundle();
+        b.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, answer);
+        boolean typed = s.editor.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b);
+        if (!typed) {
+            Prefs.status(this, "Samsung reply field rejected text", "No content saved.");
+            return;
+        }
+        boolean sent = click(s.sender);
+        if (sent) {
+            lastSentFingerprint = fingerprint(answer);
+            replies++;
+            lastReplySentAt = now;
+            Prefs.status(this, "Reply click attempted (" + replies + "); confirm on real test call",
+                    "Raw conversation not stored. Last topic: " + intent);
+        } else {
+            Prefs.status(this, "Send click failed; text might remain in Samsung input field",
+                    "No raw caller content saved.");
+        }
+    }
+
+    private void scan(AccessibilityNodeInfo n, Snapshot s, int depth, boolean incomingScope) {
+        if (n == null || depth > 20 || s.nodes >= 180 || n.isPassword()) return;
+        s.nodes++;
+        String id = n.getViewIdResourceName();
+        String label = label(n);
+        String text = n.getText() == null ? "" : n.getText().toString();
+        String description = n.getContentDescription() == null ? "" : n.getContentDescription().toString();
+        String l = label.toLowerCase(Locale.ROOT);
+        boolean inbound = CallTurnGuard.isIncoming(id, description);
+        boolean outgoing = CallTurnGuard.isOutgoing(id, description);
+        if (!outgoing && inbound) {
+            s.inbound++;
+            String v = CallTurnGuard.normalizedCallerText(text, description);
+            if (!v.isEmpty()) s.callerText = v;
+        } else if (!outgoing && incomingScope && !n.isEditable() && !text.isEmpty()) {
+            String v = CallTurnGuard.normalizedCallerText(text, "");
+            if (!v.isEmpty()) { s.callerText = v; s.inbound++; }
+        }
+
+        if (id != null && FLOATING_BUTTON.equals(id) && n.isVisibleToUser()) {
+            s.textCallButton = n;
+        }
+        // Accept confirmation may have no ID on some Samsung releases.
+        if (s.textCallConfirm == null && n.isClickable()
+                && ((l.contains("text call") && l.contains("answer"))
+                || (l.contains("text call") && l.contains("swipe to answer")))) {
+            s.textCallConfirm = n;
+        }
+        if (l.equals("incoming call") || l.equals("answer call") || l.equals("decline call")
+                || l.contains("incoming call")) s.incomingScreen = true;
+        if (l.contains("end call") || l.contains("switch to voice call")
+                || l.contains("voice call")) s.inCall = true;
+        if (n.isEditable() && n.isVisibleToUser()) {
+            s.editables++;
+            s.editor = n;
+        }
+        if (n.isClickable() && n.isVisibleToUser() && CallTurnGuard.safeSend(id, label)) {
+            s.sendButtons++;
+            s.sender = n;
+        }
+        for (int i = 0; i < n.getChildCount() && s.nodes < 180; i++) {
+            scan(n.getChild(i), s, depth + 1, incoming || (incomingScope && !outgoing));
+        }
+    }
+
+    private static String label(AccessibilityNodeInfo n) {
+        CharSequence description = n.getContentDescription();
+        if (description != null && description.length() > 0) return description.toString().trim();
+        CharSequence text = n.getText();
+        return text == null ? "" : text.toString().trim();
+    }
+    private static boolean click(AccessibilityNodeInfo node) {
+        if (node == null || !node.isVisibleToUser()) return false;
+        if (node.isClickable()) return node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        AccessibilityNodeInfo parent = node.getParent();
+        if (parent != null && parent.isClickable() && parent.isVisibleToUser()) {
+            return parent.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        }
+        return false;
+    }
+
+    private static String fingerprint(String text) {
+        try {
+            byte[] v = MessageDigest.getInstance("SHA-256")
+                    .digest(text.getBytes(StandardCharsets.UTF_8));
+            StringBuilder out = new StringBuilder();
+            for (int i=0;i<12;i++) out.append(String.format(Locale.ROOT,"%02x",v[i] & 0xff));
+            return out.toString();
+        } catch (Exception e) { return Integer.toHexString(text.hashCode()); }
+    }
+
+    private final Runnable expire = new Runnable() {
+        @Override public void run() {
+            if (SystemClock.elapsedRealtime() - lastCallEvent < 30000L) return;
+            finalizeSession();
             removePanel();
         }
+    };
+
+    private void finalizeSession() {
+        if (briefCommitted) return;
+        briefCommitted = true;
+        SharedPreferences p = Prefs.get(this);
+        if (p.getBoolean(Prefs.SAVE_BRIEF, false) && callerTurns > 0) {
+            boolean ok = new PrivateBriefStore(this).save(intent,
+                    CallTurnGuard.followUp(intent), callerTurns);
+            Prefs.status(this, ok ? "Encrypted call brief saved" : "Could not encrypt call brief",
+                    "Summary contains only category, follow-up and turn count; no raw transcript.");
+        }
+        conversation = null;
+        inTextCall = false;
+        callerTurns = 0;
+        replies = 0;
+        intent = "General enquiry";
+        lastInboundFingerprint = "";
+        lastSentFingerprint = "";
+        autoWindowEnd = 0;
+        confirmUntil = 0;
+        lastAnswerAttempt = 0;
     }
 
-    private void scan(AccessibilityNodeInfo node, Scan scan, int depth) {
-        if (node == null || depth > 15 || scan.nodes > 130) return;
-        scan.nodes++;
-        if (node.isEditable()) scan.editable++;
-        if (node.isClickable()) scan.clickable++;
-        // UI control labels are inspected in memory, never persisted.
-        CharSequence d = node.getContentDescription();
-        String desc = d == null ? "" : d.toString().toLowerCase(java.util.Locale.ROOT);
-        CharSequence t = node.getText();
-        String label = t == null ? "" : t.toString().toLowerCase(java.util.Locale.ROOT);
-        if (hasAnchor(desc) || hasAnchor(label)) scan.callAnchor = true;
-        for (int i = 0; i < node.getChildCount() && scan.nodes <= 130; i++)
-            scan(node.getChild(i), scan, depth + 1);
+    private GradientDrawable background(int color) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(18 * getResources().getDisplayMetrics().density);
+        return d;
     }
-
-    private boolean hasAnchor(String s) {
-        return s.equals("answer") || s.equals("decline") || s.equals("end call")
-                || s.contains("bixby text call") || s.contains("text call")
-                || s.equals("reject") || s.contains("incoming call")
-                || s.equals("answer call") || s.equals("decline call");
-    }
-
-    private GradientDrawable background(int color, int radius) {
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(color);
-        bg.setCornerRadius(radius * getResources().getDisplayMetrics().density);
-        return bg;
-    }
-    private int dp(int d) {
-        return (int) (d * getResources().getDisplayMetrics().density + 0.5f);
-    }
+    private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
 
     private void showPanel() {
+        if (panel != null) return;
         try {
-            windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-            if (windowManager == null) return;
+            manager = (WindowManager)getSystemService(WINDOW_SERVICE);
+            if (manager == null) return;
             panel = new LinearLayout(this);
             panel.setOrientation(LinearLayout.VERTICAL);
-            panel.setPadding(dp(14),dp(12),dp(14),dp(12));
-            panel.setBackground(background(Color.rgb(17,28,53),20));
+            panel.setPadding(dp(13),dp(11),dp(13),dp(11));
+            panel.setBackground(background(Color.rgb(16,31,60)));
             TextView heading = new TextView(this);
-            heading.setText("✦  CALLCOMPANION  ·  PREVIEW");
+            heading.setText("◉  CALLCOMPANION");
             heading.setTextColor(Color.WHITE);
-            heading.setTextSize(12);
+            heading.setTextSize(14);
             panel.addView(heading);
-            TextView disclosure = new TextView(this);
-            disclosure.setText("Bixby Text Call must be started manually. This panel cannot answer or speak into your SIM call.");
-            disclosure.setTextColor(Color.rgb(198,214,238));
-            disclosure.setTextSize(11);
-            disclosure.setPadding(0,dp(5),0,dp(7));
-            panel.addView(disclosure);
+            TextView note = new TextView(this);
+            note.setText("Samsung Text Call • experimental");
+            note.setTextColor(Color.rgb(197,214,235));
+            note.setTextSize(11);
+            panel.addView(note);
 
-            final String[] styles = {"Deep", "Natural", "Bright"};
-            Button style = new Button(this);
-            style.setAllCaps(false);
-            style.setText("Voice preset: " + Prefs.get(this).getString(Prefs.STYLE, "Natural"));
-            style.setOnClickListener(v -> {
-                SharedPreferences p = Prefs.get(this);
-                String current = p.getString(Prefs.STYLE, "Natural");
-                int n = "Deep".equals(current) ? 1 : "Natural".equals(current) ? 2 : 0;
-                p.edit().putString(Prefs.STYLE, styles[n]).apply();
-                style.setText("Voice preset: " + styles[n]);
+            Button attend = new Button(this);
+            attend.setText("Try AI Attend (Bixby)");
+            attend.setAllCaps(false);
+            attend.setOnClickListener(v -> {
+                autoWindowEnd = SystemClock.elapsedRealtime() + 7000L;
+                handler.removeCallbacks(poll);
+                handler.post(poll);
             });
-            panel.addView(style);
+            panel.addView(attend);
+
             Button open = new Button(this);
+            open.setText("App / call brief");
             open.setAllCaps(false);
-            open.setText("Open app · voices and privacy");
             open.setOnClickListener(v -> {
                 removePanel();
-                Intent i = new Intent(this, MainActivity.class);
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                startActivity(i);
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(intent);
             });
             panel.addView(open);
             Button dismiss = new Button(this);
+            dismiss.setText("Dismiss");
             dismiss.setAllCaps(false);
-            dismiss.setText("×  Dismiss shortcut");
             dismiss.setOnClickListener(v -> { dismissed = true; removePanel(); });
             panel.addView(dismiss);
 
             WindowManager.LayoutParams p = new WindowManager.LayoutParams(
-                    dp(255), WindowManager.LayoutParams.WRAP_CONTENT,
+                    dp(240), WindowManager.LayoutParams.WRAP_CONTENT,
                     WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                             | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                     PixelFormat.TRANSLUCENT);
             p.gravity = Gravity.TOP | Gravity.END;
-            p.x = dp(12);
-            p.y = dp(180);
-            windowManager.addView(panel, p);
-        } catch (Exception ignored) { removePanel(); }
+            p.x = dp(14); p.y = dp(130);
+            manager.addView(panel, p);
+        } catch (Exception e) { removePanel(); }
     }
-
-    private void scheduleExpiry() {
-        handler.removeCallbacksAndMessages(null);
-        handler.postDelayed(() -> {
-            if (SystemClock.elapsedRealtime() >= panelExpiryAt) {
-                removePanel();
-                dismissed = false;
-            }
-        }, 18500L);
-    }
-
     private void removePanel() {
-        if (panel != null && windowManager != null) {
-            try { windowManager.removeView(panel); } catch (Exception ignored) { }
+        if (panel != null && manager != null) {
+            try { manager.removeView(panel); } catch (Exception ignored) { }
         }
         panel = null;
     }
-
-    @Override public void onInterrupt() { removePanel(); }
+    @Override public void onInterrupt() {
+        removePanel();
+        handler.removeCallbacks(poll);
+    }
     @Override public void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        finalizeSession();
         removePanel();
         super.onDestroy();
     }
-    private static final class Scan {
+    private static final class Snapshot {
         int nodes;
-        int editable;
-        int clickable;
-        boolean callAnchor;
+        int editables;
+        int sendButtons;
+        int inbound;
+        boolean inCall;
+        boolean incomingScreen;
+        AccessibilityNodeInfo textCallButton;
+        AccessibilityNodeInfo textCallConfirm;
+        AccessibilityNodeInfo editor;
+        AccessibilityNodeInfo sender;
+        String callerText = "";
+        boolean relevant() {
+            return inCall || incomingScreen || textCallButton != null || textCallConfirm != null
+                    || editables > 0;
+        }
     }
 }
