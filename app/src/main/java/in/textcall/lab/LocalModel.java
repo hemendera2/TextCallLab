@@ -68,8 +68,9 @@ public final class LocalModel {
             File dest = modelFile(app);
             File temporary = new File(dest.getParentFile(), LOCAL_FILE + ".part");
             if (loaded) {
-                callback.done(false, "Unload model / restart app before replacing existing GGUF.");
-                return;
+                nativeUnload();
+                loaded = false;
+                status = "Previous model unloaded for replacement.";
             }
             try {
                 status = "Importing selected GGUF…";
@@ -101,6 +102,16 @@ public final class LocalModel {
             }
         });
     }
+    /** Release loaded GGUF without uninstalling the app; queued behind inference. */
+    public void unload(Callback callback) {
+        cancel();
+        serial.execute(() -> {
+            if (nativeAvailable) nativeUnload();
+            loaded = false;
+            status = "Model unloaded. Select another GGUF or load again.";
+            callback.done(true, status);
+        });
+    }
     public void load(Context context, Callback callback) {
         Context app = context.getApplicationContext();
         serial.execute(() -> {
@@ -126,7 +137,7 @@ public final class LocalModel {
             }
             long begin = SystemClock.elapsedRealtime();
             String prompt = PromptFormatter.format(owner, facts, rules, history, caller);
-            String response = nativeGenerate(prompt, 48);
+            String response = nativeGenerate(prompt, 32);
             if (generationKey.get() != id) {
                 callback.done("", "Cancelled", SystemClock.elapsedRealtime() - begin);
                 return;
@@ -146,7 +157,7 @@ public final class LocalModel {
                 return;
             }
             long begin = SystemClock.elapsedRealtime();
-            String answer = nativeGenerate(PromptFormatter.brief(callerPhrases), 64);
+            String answer = nativeGenerate(PromptFormatter.brief(callerPhrases), 44);
             String cleaned = generationKey.get() == id ? PromptFormatter.clean(answer) : "";
             if (cleaned.isEmpty()) callback.done("", "Summary unavailable or cancelled. " + progress(), SystemClock.elapsedRealtime() - begin);
             else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
@@ -154,6 +165,7 @@ public final class LocalModel {
     }
     private static native String nativeLoad(String absolutePath);
     private static native String nativeGenerate(String prompt, int maxNewTokens);
+    private static native void nativeUnload();
     private static native void nativeCancel();
     private static native String nativeProgress();
 }
