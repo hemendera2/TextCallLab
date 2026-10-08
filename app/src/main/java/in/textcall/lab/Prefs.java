@@ -13,6 +13,7 @@ final class Prefs {
     static final String STATUS = "status";
     static final String DIAGNOSTICS = "diagnostics";
     static final String VOICE = "voice_id";
+    static final String LANGUAGE = "locale_tag";
     static final String STYLE = "voice_style";
     static final String SPEED = "speech_rate";
     static final String FLOATING = "floating_panel";
