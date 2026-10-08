@@ -10,8 +10,8 @@ android {
         applicationId 'in.textcall.lab'
         minSdk 29
         targetSdk 35
-        versionCode 3
-        versionName '0.3-offline-voice-preview'
+        versionCode 4
+        versionName '0.4-native-shell'
     }
 
     compileOptions {
