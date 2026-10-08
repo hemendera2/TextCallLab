@@ -9,7 +9,9 @@
     <!-- No INTERNET, READ_PHONE_STATE, RECORD_AUDIO or call-log permissions. -->
     <application
         android:allowBackup="false"
-        android:label="TextCall Lab"
+        android:label="CallCompanion"
+        android:icon="@drawable/app_mark"
+        android:roundIcon="@drawable/app_mark"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
