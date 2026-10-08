@@ -54,6 +54,9 @@ public final class BixbyAccessibilityService extends AccessibilityService {
     private ConversationEngine conversation;
     private boolean inTextCall;
     private boolean briefCommitted;
+    private boolean modelLoading;
+    private boolean generating;
+    private long generationEpoch;
 
     private final Runnable poll = new Runnable() {
         @Override public void run() {
@@ -142,6 +145,17 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         if (p.getBoolean(Prefs.AUTO_ATTEND, false) || now < autoWindowEnd) {
             tryBeginTextCall(snapshot, now);
         }
+        if (inTextCall && p.getBoolean(Prefs.LIVE_REPLY, false)
+                && p.getBoolean(Prefs.USE_LLM, false)
+                && !LocalModel.get().isLoaded() && !modelLoading
+                && LocalModel.isImported(this)) {
+            modelLoading = true;
+            LocalModel.get().load(this, (ok, message) -> handler.post(() -> {
+                modelLoading = false;
+                Prefs.status(this, ok ? "Offline Qwen loaded for calls" : "Offline Qwen load failed",
+                        "Model is on device. " + message);
+            }));
+        }
         if (inTextCall && (p.getBoolean(Prefs.LIVE_REPLY, false)
                 || p.getBoolean(Prefs.SAVE_BRIEF, false))) {
             observeTurn(snapshot, now, p.getBoolean(Prefs.LIVE_REPLY, false));
@@ -180,6 +194,12 @@ public final class BixbyAccessibilityService extends AccessibilityService {
     private void observeTurn(Snapshot s, long now, boolean autoReply) {
         // Do not learn from ambiguous unlabeled chat bubbles or reply input.
         if (!s.inCall || s.inbound == 0 || s.callerText.isEmpty() || conversation == null) return;
+        boolean useModel = autoReply && Prefs.get(this).getBoolean(Prefs.USE_LLM, false);
+        if (useModel && !LocalModel.get().isLoaded()) {
+            // Do not replace the requested generative conversation with a
+            // misleading fixed script during model warm-up.
+            return;
+        }
         String hash = fingerprint(s.callerText);
         if (hash.equals(lastInboundFingerprint) || hash.equals(lastSentFingerprint)) return;
         lastInboundFingerprint = hash;
@@ -190,14 +210,60 @@ public final class BixbyAccessibilityService extends AccessibilityService {
         if (!autoReply) return;
         if (s.editables != 1 || s.sendButtons != 1 || s.editor == null || s.sender == null
                 || replies >= MAX_REPLIES || now - lastReplySentAt < COOLDOWN_MS) return;
+        if (useModel) {
+            if (generating) return;
+            generating = true;
+            long epoch = generationEpoch;
+            String caller = s.callerText;
+            SharedPreferences settings = Prefs.get(this);
+            LocalModel.get().reply(
+                    settings.getString(Prefs.PROFILE_NAME, "Owner"),
+                    settings.getString(Prefs.PROFILE_INFO, ""),
+                    settings.getString(Prefs.PROFILE_RULES, ""),
+                    conversation.recentTurns(), caller,
+                    (response, error, latencyMs) -> handler.post(() -> {
+                        generating = false;
+                        if (epoch != generationEpoch || !inTextCall
+                                || !Prefs.get(this).getBoolean(Prefs.ENABLED, false)
+                                || !Prefs.get(this).getBoolean(Prefs.LIVE_REPLY, false)
+                                || !Prefs.get(this).getBoolean(Prefs.USE_LLM, false)) return;
+                        if (response.isEmpty()) {
+                            Prefs.status(this, "Offline Qwen could not generate reply", error);
+                            return;
+                        }
+                        AccessibilityNodeInfo latest = samsungRoot();
+                        if (latest == null) return;
+                        Snapshot fresh = new Snapshot();
+                        scan(latest, fresh, 0, false);
+                        // Reject stale output and any changed caller message.
+                        if (!fresh.inCall || fresh.editables != 1 || fresh.sendButtons != 1
+                                || fresh.inbound == 0 || !hash.equals(fingerprint(fresh.callerText))) {
+                            Prefs.status(this, "AI reply rejected: Samsung screen/turn changed",
+                                    "No raw transcript stored.");
+                            return;
+                        }
+                        boolean sent = sendText(fresh, response);
+                        if (sent) {
+                            conversation.recordExchange(caller, response);
+                            Prefs.status(this, "Offline Qwen reply submitted in " + latencyMs + "ms",
+                                    "Confirm on a trusted test call that Bixby spoke the reply.");
+                        }
+                    }));
+            return;
+        }
         String answer = conversation.respond(s.callerText);
         if (answer.isEmpty()) return;
+        sendText(s, answer);
+    }
+    private boolean sendText(Snapshot s, String answer) {
+        if (s.editor == null || s.sender == null || s.editables != 1 || s.sendButtons != 1)
+            return false;
         Bundle text = new Bundle();
         text.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, answer);
         boolean typed = s.editor.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, text);
         if (!typed) {
             Prefs.status(this, "Samsung reply field rejected local reply", "No caller text stored.");
-            return;
+            return false;
         }
         boolean sent = click(s.sender);
         if (sent) {
@@ -210,6 +276,7 @@ public final class BixbyAccessibilityService extends AccessibilityService {
             Prefs.status(this, "Send click failed; Bixby input may contain unsent text",
                     "No raw caller content saved.");
         }
+        return sent;
     }
 
     private void scan(AccessibilityNodeInfo n, Snapshot s, int depth, boolean incomingScope) {
@@ -295,6 +362,8 @@ public final class BixbyAccessibilityService extends AccessibilityService {
     };
 
     private void finalizeSession() {
+        ++generationEpoch;
+        generating = false;
         if (briefCommitted) return;
         briefCommitted = true;
         SharedPreferences p = Prefs.get(this);
