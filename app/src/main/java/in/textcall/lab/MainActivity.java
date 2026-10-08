@@ -50,6 +50,7 @@ public final class MainActivity extends Activity {
     private ConversationEngine session;
     private boolean autoConversation = false;
     private boolean foreground = false;
+    private boolean pendingMicStart = false;
     private String talkStatus = "Ready for a new private voice session.";
     private TextView talkStatusView;
     private final int REQUEST_MIC = 4107;
@@ -75,6 +76,7 @@ public final class MainActivity extends Activity {
         super.onResume();
         foreground = true;
         if (body != null) render();
+        if (pendingMicStart) { pendingMicStart = false; startMic(); }
     }
 
     private void render() {
@@ -283,6 +285,7 @@ public final class MainActivity extends Activity {
     }
     private void stopTalk() {
         autoConversation = false;
+        pendingMicStart = false;
         if (inputSpeech != null) inputSpeech.stop();
         if (voice != null) voice.stop();
         setTalkStatus("Session paused. Microphone off.");
@@ -298,6 +301,7 @@ public final class MainActivity extends Activity {
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingMicStart = true;
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_MIC);
             return;
         }
@@ -306,8 +310,10 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grants) {
         super.onRequestPermissionsResult(requestCode, permissions, grants);
         if (requestCode == REQUEST_MIC) {
-            if (grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) startMic();
-            else { autoConversation = false; setTalkStatus("Microphone not permitted. Typed replies remain available."); }
+            if (grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) {
+                pendingMicStart = true;
+                if (foreground) { pendingMicStart = false; startMic(); }
+            } else { pendingMicStart = false; autoConversation = false; setTalkStatus("Microphone not permitted. Typed replies remain available."); }
         }
     }
     private void startMic() {
