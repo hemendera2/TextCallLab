@@ -237,7 +237,7 @@ public final class BixbyAccessibilityService extends AccessibilityService {
             s.sender = n;
         }
         for (int i = 0; i < n.getChildCount() && s.nodes < 180; i++) {
-            scan(n.getChild(i), s, depth + 1, incoming || (incomingScope && !outgoing));
+            scan(n.getChild(i), s, depth + 1, inbound || (incomingScope && !outgoing));
         }
     }
 
