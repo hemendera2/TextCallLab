@@ -94,6 +94,14 @@ public final class ConversationEngine {
         return answer;
     }
 
+    /** Store only bounded in-memory assistant exchanges after actual inference. */
+    public void recordExchange(String caller, String assistant) {
+        if (caller == null || assistant == null || caller.trim().isEmpty()
+                || assistant.trim().isEmpty()) return;
+        count++;
+        add("Caller", limit(caller, 400, ""));
+        add("Assistant", limit(assistant, 480, ""));
+    }
     public List<String> recentTurns() { return new ArrayList<>(turns); }
     public int count() { return count; }
     public void clear() { turns.clear(); count = 0; topic = ""; }
