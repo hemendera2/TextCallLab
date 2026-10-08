@@ -20,6 +20,8 @@ final class Prefs {
     static final String PROBE = "diagnostic_enabled";
     static final String PROFILE_NAME = "profile_name";
     static final String PROFILE_INFO = "profile_info";
+    static final String PROFILE_RULES = "profile_rules";
+    static final String SPEECH_LANGUAGE = "speech_language";
     private static final String SAFE_MIGRATED = "safe_migrated_v2";
 
     private Prefs() { }
