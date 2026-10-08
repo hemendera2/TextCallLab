@@ -1,126 +1,180 @@
 #include <jni.h>
 #include "llama.h"
 #include <algorithm>
-#include <cstdio>
+#include <atomic>
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <vector>
 
 namespace {
 std::mutex gate;
-llama_model * model = nullptr;
-const llama_vocab * vocab = nullptr;
-bool backend_initialized = false;
+std::atomic<bool> cancel_requested{false};
+std::atomic<int> phase{0}; // 0 idle, 1 tokenizing, 2 prefill, 3 decoding, 4 timeout, 5 cancelled, 6 error
+std::atomic<int> prefill_done{0}, prefill_total{0}, decoded_tokens{0};
+llama_model *model=nullptr;
+llama_context *context=nullptr;
+llama_batch_ext *batch=nullptr;
+const llama_vocab *vocab=nullptr;
+bool backend_initialized=false;
+constexpr int CONTEXT_TOKENS=1024;
+constexpr int MAX_PROMPT=790;
+constexpr int MAX_OUTPUT=48;
+constexpr auto MAX_CPU_TIME=std::chrono::seconds(35);
+using Clock=std::chrono::steady_clock;
 
-static void push_tokens(llama_batch_ext *batch, const llama_token *tokens,
-                        int size, int start, bool emit_final, int total) {
-    llama_batch_ext_clear(batch);
-    for (int i=0;i<size;i++) {
-        const int index=llama_batch_ext_add_token(batch, 0, tokens[i]);
-        if (index < 0) return;
-        const llama_pos pos=start+i;
-        llama_batch_ext_set_pos(batch, index, &pos);
-        if (emit_final && start+i == total-1) {
-            llama_batch_ext_set_output_logits(batch, index, true);
-        }
-    }
+bool terminated(Clock::time_point start) {
+    if (cancel_requested.load()) { phase.store(5); return true; }
+    if (Clock::now()-start>MAX_CPU_TIME) { phase.store(4); return true; }
+    return false;
 }
-static std::string decode(const std::string &prompt, int output_limit) {
-    if (!model || !vocab) return "";
-    std::vector<llama_token> prompt_tokens(1700);
-    int n=llama_tokenize(vocab, prompt.c_str(), (int)prompt.size(),
-                         prompt_tokens.data(), (int)prompt_tokens.size(), true, true);
-    if (n<=0 || n>1300) return "";
-    prompt_tokens.resize((size_t)n);
 
-    llama_context_params cp=llama_context_default_params();
-    cp.n_ctx=1536;
-    cp.n_batch=256;
-    cp.n_ubatch=128;
-    cp.n_threads=4;
-    cp.n_threads_batch=4;
-    cp.no_perf=true;
-    llama_context *ctx=llama_init_from_model(model, cp);
-    if (!ctx) return "";
-
-    llama_batch_ext *batch=llama_batch_ext_init(ctx);
-    if (!batch) { llama_free(ctx); return ""; }
-    int position=0;
-    bool ok=true;
-    for (int offset=0;offset<n;offset+=128) {
-        int count=std::min(128,n-offset);
-        push_tokens(batch,prompt_tokens.data()+offset,count,offset,true,n);
-        if (llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE,batch)!=0) {
-            ok=false; break;
+bool set_batch(const llama_token *tokens,int count,int pos,bool show_logits) {
+    llama_batch_ext_clear(batch);
+    for(int i=0;i<count;++i) {
+        int index=llama_batch_ext_add_token(batch,0,tokens[i]);
+        if(index<0) return false;
+        const llama_pos p=pos+i;
+        if(!llama_batch_ext_set_pos(batch,index,&p)) return false;
+        if(show_logits && i==count-1) {
+            if(!llama_batch_ext_set_output_logits(batch,index,true)) return false;
         }
-        position+=count;
     }
-    std::string output;
-    if (ok) {
-        llama_sampler_chain_params sp=llama_sampler_chain_default_params();
-        llama_sampler *sampler=llama_sampler_chain_init(sp);
-        llama_sampler_chain_add(sampler,llama_sampler_init_top_k(32));
-        llama_sampler_chain_add(sampler,llama_sampler_init_temp(0.60f));
-        llama_sampler_chain_add(sampler,llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    return true;
+}
 
-        for (int i=0;i<std::max(1,std::min(output_limit,80));i++) {
-            llama_token next=llama_sampler_sample(sampler,ctx,-1);
-            if (llama_vocab_is_eog(vocab,next)) break;
-            char piece[2048];
-            int length=llama_token_to_piece(vocab,next,piece,sizeof(piece),0,true);
-            if (length>0) {
-                output.append(piece,(size_t)length);
-                if (output.find("<|im_end|>") != std::string::npos) break;
-                if (output.size()>550) break;
-            }
-            if (position+1 >= 1536) break;
-            push_tokens(batch,&next,1,position,false,1);
-            llama_batch_ext_set_output_logits(batch,0,true);
-            if (llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE,batch)!=0) break;
-            position++;
+std::string run(const std::string& prompt,int requested_tokens) {
+    if(!model||!context||!batch||!vocab) { phase.store(6); return ""; }
+    cancel_requested.store(false);
+    phase.store(1);
+    prefill_done.store(0);
+    prefill_total.store(0);
+    decoded_tokens.store(0);
+    const auto began=Clock::now();
+
+    // Clear recurrent / KV memory between requests: no bleed across callers.
+    llama_memory_t mem=llama_get_memory(context);
+    if(mem) llama_memory_clear(mem,true);
+
+    std::vector<llama_token> tokens(MAX_PROMPT+1);
+    int n=llama_tokenize(vocab,prompt.c_str(),(int)prompt.size(),
+                         tokens.data(),(int)tokens.size(),true,true);
+    if(n<=0||n>MAX_PROMPT) { phase.store(6); return ""; }
+    tokens.resize((size_t)n);
+    prefill_total.store(n);
+    phase.store(2);
+    int cursor=0;
+    // Smaller prefill chunks for cooperative cancellation and progress.
+    for(int offset=0;offset<n;offset+=64) {
+        if(terminated(began)) return "";
+        int size=std::min(64,n-offset);
+        if(!set_batch(tokens.data()+offset,size,offset,offset+size==n) ||
+           llama_process(context,LLAMA_PROCESS_TYPE_DECODE,batch)!=0) {
+            phase.store(6); return "";
         }
-        llama_sampler_free(sampler);
+        cursor+=size;
+        prefill_done.store(cursor);
     }
-    llama_batch_ext_free(batch);
-    llama_free(ctx);
-    return output;
+    if(terminated(began)) return "";
+
+    llama_sampler_chain_params sp=llama_sampler_chain_default_params();
+    llama_sampler *sampler=llama_sampler_chain_init(sp);
+    if(!sampler) { phase.store(6); return ""; }
+    llama_sampler_chain_add(sampler,llama_sampler_init_top_k(24));
+    llama_sampler_chain_add(sampler,llama_sampler_init_temp(0.55f));
+    llama_sampler_chain_add(sampler,llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+
+    std::string out;
+    phase.store(3);
+    const int max_output=std::min(MAX_OUTPUT,std::max(1,requested_tokens));
+    for(int i=0;i<max_output;++i) {
+        if(terminated(began)) { out.clear(); break; }
+        const llama_token next=llama_sampler_sample(sampler,context,-1);
+        if(llama_vocab_is_eog(vocab,next)) break;
+        char piece[1024];
+        int size=llama_token_to_piece(vocab,next,piece,sizeof(piece),0,true);
+        if(size>0) {
+            out.append(piece,(size_t)size);
+            if(out.find("<|im_end|>")!=std::string::npos || out.size()>500) break;
+        }
+        decoded_tokens.store(i+1);
+        if(cursor>=CONTEXT_TOKENS-1) break;
+        if(!set_batch(&next,1,cursor,true) ||
+           llama_process(context,LLAMA_PROCESS_TYPE_DECODE,batch)!=0) {
+            phase.store(6);
+            out.clear();
+            break;
+        }
+        ++cursor;
+    }
+    llama_sampler_free(sampler);
+    if(phase.load()==3) phase.store(0);
+    return out;
 }
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_in_textcall_lab_LocalModel_nativeLoad(JNIEnv *env,jclass,jstring path) {
     std::lock_guard<std::mutex> lock(gate);
-    if (model) return env->NewStringUTF("");
-    if (!backend_initialized) {
+    if(model && context && batch) return env->NewStringUTF("");
+    if(!backend_initialized) {
         llama_backend_init();
-        backend_initialized = true;
+        backend_initialized=true;
     }
-    const char *utf=env->GetStringUTFChars(path,nullptr);
-    if (!utf) return env->NewStringUTF("No path");
-    std::string filename(utf);
-    env->ReleaseStringUTFChars(path,utf);
+    const char *chars=env->GetStringUTFChars(path,nullptr);
+    if(!chars) return env->NewStringUTF("Model path unavailable");
+    std::string filename(chars);
+    env->ReleaseStringUTFChars(path,chars);
     llama_model_params mp=llama_model_default_params();
     mp.n_gpu_layers=0;
     mp.load_mode=LLAMA_LOAD_MODE_MMAP;
     model=llama_model_load_from_file(filename.c_str(),mp);
-    if (!model) return env->NewStringUTF("llama.cpp could not load GGUF; verify architecture, file and available RAM");
+    if(!model) return env->NewStringUTF("Could not load GGUF. Check storage and supported architecture");
     vocab=llama_model_get_vocab(model);
-    if (!vocab) {
-        llama_model_free(model);
-        model=nullptr;
-        return env->NewStringUTF("No tokenizer found in GGUF");
-    }
+    if(!vocab) return env->NewStringUTF("GGUF tokenizer missing");
+    llama_context_params cp=llama_context_default_params();
+    cp.n_ctx=CONTEXT_TOKENS;
+    cp.n_batch=128;
+    cp.n_ubatch=64;
+    cp.n_threads=4;
+    cp.n_threads_batch=4;
+    cp.no_perf=true;
+    context=llama_init_from_model(model,cp);
+    if(!context) return env->NewStringUTF("Not enough RAM to initialize AI context");
+    batch=llama_batch_ext_init(context);
+    if(!batch) return env->NewStringUTF("Unable to initialize token batch");
+    phase.store(0);
     return env->NewStringUTF("");
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_in_textcall_lab_LocalModel_nativeGenerate(JNIEnv *env,jclass,jstring prompt,jint limit) {
     std::lock_guard<std::mutex> lock(gate);
-    if (!model) return env->NewStringUTF("");
-    const char *bytes=env->GetStringUTFChars(prompt,nullptr);
-    if (!bytes) return env->NewStringUTF("");
-    std::string input(bytes);
-    env->ReleaseStringUTFChars(prompt,bytes);
-    std::string output=decode(input,(int)limit);
+    const char *s=env->GetStringUTFChars(prompt,nullptr);
+    if(!s) return env->NewStringUTF("");
+    std::string input(s);
+    env->ReleaseStringUTFChars(prompt,s);
+    std::string output=run(input,(int)limit);
     return env->NewStringUTF(output.c_str());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_in_textcall_lab_LocalModel_nativeCancel(JNIEnv *,jclass) {
+    cancel_requested.store(true);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_in_textcall_lab_LocalModel_nativeProgress(JNIEnv *env,jclass) {
+    std::string state;
+    switch(phase.load()) {
+        case 1: state="Tokenizing prompt"; break;
+        case 2: state="Prefill "+std::to_string(prefill_done.load())+"/"+
+                       std::to_string(prefill_total.load())+" tokens"; break;
+        case 3: state="Generating "+std::to_string(decoded_tokens.load())+" reply tokens"; break;
+        case 4: state="Inference timed out after 35 seconds"; break;
+        case 5: state="Inference cancelled"; break;
+        case 6: state="Inference failed (see model/support)"; break;
+        default: state="Model idle"; break;
+    }
+    return env->NewStringUTF(state.c_str());
 }
