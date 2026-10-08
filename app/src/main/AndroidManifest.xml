@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Resolve only installed system text-to-speech engines; do not request network or microphone. -->
+    <!-- RECORD_AUDIO is optional and requested only when the user taps the in-app microphone.
+         There is still no INTERNET, cellular audio access, contacts or messaging permission. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Discover only speech services installed on the device. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
-    <!-- No INTERNET, READ_PHONE_STATE, RECORD_AUDIO or call-log permissions. -->
+    <!-- No INTERNET, READ_PHONE_STATE or call-log permissions. -->
     <application
         android:allowBackup="false"
         android:label="CallCompanion"
