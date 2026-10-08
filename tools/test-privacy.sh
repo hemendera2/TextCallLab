@@ -24,6 +24,16 @@ grep -Fq 's.editables != 1 || s.sendButtons != 1' "$service"
 grep -Fq 'MAX_REPLIES = 12' "$service"
 grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/PrivateBriefStore.java
 grep -Fq 'AES/GCM/NoPadding' app/src/main/java/in/textcall/lab/PrivateBriefStore.java
+grep -Fq 'System.loadLibrary("callcompanion_llm")' app/src/main/java/in/textcall/lab/LocalModel.java
+grep -Fq 'getContentResolver().openInputStream' app/src/main/java/in/textcall/lab/LocalModel.java
+grep -Fq 'private static native String nativeGenerate' app/src/main/java/in/textcall/lab/LocalModel.java
+grep -Fq 'llama_model_load_from_file' app/src/main/cpp/callcompanion-llm.cpp
+grep -Fq 'LLAMA_PROCESS_TYPE_DECODE' app/src/main/cpp/callcompanion-llm.cpp
+grep -Fq 'Prefs.USE_LLM, false' "$service"
+grep -Fq 'epoch != generationEpoch' "$service"
+grep -Fq '!hash.equals(fingerprint(fresh.callerText))' "$service"
+grep -Fq 'compileSdk 35' app/build.gradle
+grep -Fq "abiFilters 'arm64-v8a'" app/build.gradle
 grep -Fq 'TYPE_ACCESSIBILITY_OVERLAY' "$service"
 grep -Fq 'No call transcripts are saved' "$main"
 grep -Fq 'v.isNetworkConnectionRequired()' "$voices"
