@@ -19,6 +19,7 @@ final class Prefs {
     static final String FLOATING = "floating_panel";
     static final String AUTO_ATTEND = "auto_attend_samsung_v1";
     static final String LIVE_REPLY = "live_reply_samsung_v1";
+    static final String USE_LLM = "use_offline_qwen_for_calls_v1";
     static final String SAVE_BRIEF = "save_encrypted_call_brief_v1";
     static final String PROBE = "diagnostic_enabled";
     static final String PROFILE_NAME = "profile_name";
