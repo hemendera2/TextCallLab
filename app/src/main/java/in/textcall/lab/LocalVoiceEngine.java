@@ -59,7 +59,8 @@ final class LocalVoiceEngine {
         for (Voice v : offline) if (v.getLocale().equals(locale)) list.add(v);
         return list;
     }
-    boolean speak(String text) {
+    boolean speak(String text) { return speak(text, null); }
+    boolean speak(String text, Runnable onFinish) {
         if (!ready || tts == null || text == null || text.trim().isEmpty()) return false;
         Voice chosen = null;
         String saved = settings.getString(Prefs.VOICE, "");
@@ -78,7 +79,16 @@ final class LocalVoiceEngine {
         tts.setPitch(pitch);
         int speed = Math.max(75, Math.min(125, settings.getInt(Prefs.SPEED, 100)));
         tts.setSpeechRate(speed / 100f);
-        return tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "local-preview") == TextToSpeech.SUCCESS;
+        final String utteranceId = java.util.UUID.randomUUID().toString();
+        tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String id) { }
+            @Override public void onDone(String id) {
+                if (utteranceId.equals(id) && onFinish != null)
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(onFinish);
+            }
+            @Override public void onError(String id) { }
+        });
+        return tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId) == TextToSpeech.SUCCESS;
     }
     void stop() { if (tts != null) tts.stop(); }
     void shutdown() {
