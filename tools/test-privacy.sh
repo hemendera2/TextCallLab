@@ -17,6 +17,9 @@ done
 grep -Fq 'android:allowBackup="false"' "$manifest"
 grep -Fq 'android:packageNames="com.samsung.android.incallui"' "$access"
 grep -Fq 'LIVE_SEND_CERTIFIED = false;' "$service"
+grep -Fq 'android.intent.action.TTS_SERVICE' "$manifest"
+grep -Fq 'voice.isNetworkConnectionRequired()' app/src/main/java/in/textcall/lab/MainActivity.java
+grep -Fq '.setPositiveButton("PLAY VOICE"' app/src/main/java/in/textcall/lab/MainActivity.java
 grep -Fq '.remove(DIAGNOSTICS).remove(STATUS)' "$prefs"
 grep -Fq '" | hasText="' "$service"
 
@@ -26,4 +29,4 @@ if grep -Eq '"Caller: "|"Reply: "|"Draft: "|redacted\(content\)|redacted\(desc\)
   exit 1
 fi
 
-echo 'PASS: No network/contact/SMS/audio permissions; backups off; Samsung-only probe; sending locked; metadata-only diagnostic'
+echo 'PASS: No network/contact/SMS/audio permissions; backups off; Samsung-only probe; sending locked; metadata-only diagnostic; TTS preview explicitly triggered and offline voice required'
