@@ -1,3 +1,32 @@
+# KALLVO — v0.9 product UX and voice studio
+
+KALLVO is the working product brand for this iteration, **not trademark-cleared**. KALLVO has an original minimal three-tab native Android interface: Home, Talk, Settings. The old CallCompanion advanced diagnostic interface remains available only as "Open technician panel" in Settings.
+
+## What's new
+- Native redesigned shell with concise hierarchy, responsive cards, custom KAL(L)VO mark, meaningful no-fake-green statuses, and no repeated diagnostic walls.
+- The separate Talk screen hosts real offline Qwen model import/load, microphone turn taking, bounded context, typed input, live CPU progress and a stop control.
+- Settings groups Voice Studio, owner profile, experimental Bixby control, privacy/data, and technician tools instead of placing everything on Home.
+- Voice Studio discovers installed Android TTS engines and offline voice variants, supports **explicit engine selection** and voice/sample preview, and lets the user filter by known named male/female speaker IDs only. It never relabels arbitrary low-pitched voices as male or high-pitched voices as female.
+- The pitch is neutral so genuine neural voice timbre stays intact. A neural TTS engine such as Piper/Kokoro (e.g., the separately installable VoxSherpa TTS app) must be installed with voice models for neural quality. **No neural TTS model or engine is bundled inside this APK yet.** Quality and response time have not been benchmarked on the Samsung A52s. Some third-party voice engine apps may have their own network permissions/terms even though KALLVO does not.
+- Crucially, the **selected Android neural voice applies to in-app Talk**. In a SIM call, Samsung Bixby Text Call speaks its **own** voice. No JNI or custom TTS voice is injected into the protected cellular call audio.
+- Multi-turn Qwen responses run locally, no Internet or paid API. Live Samsung Text Call bridge remains EXPERIMENTAL and **has not passed a real A52s device acceptance test**.
+- Owner profile instructions are always limited by AI error risk; no unverified booking or OTP promises.
+
+## How to try a neural voice (no new phone root)
+1. Install KALLVO's latest successfully built APK from GitHub Actions, and keep the existing downloaded verified Qwen3.5 GGUF in Downloads.
+2. Open KALLVO > Settings > Voice studio. Select an installed system TTS engine. If needed install an optional compatible neural TTS engine (Piper/Kokoro), download voice pack from its **own** source and check its privacy/license first. It will show as an installed engine when Android exposes it.
+3. Filter available named speakers by "Male" / "Female". If none are available, this is stated honestly rather than synthesizing the impression via pitch. Tap one to hear a sample. Match preview language to voice pack.
+4. KALLVO > Talk > load offline Qwen and test actual response time. The model download is not repeated; re-import only if an old debug signing-key mismatch forces a complete uninstall.
+5. Never enable auto-attend or auto-reply on private primary Jio calls until Bixby text input, speaker role identification and caller audio have been proven in a controlled test.
+
+## Product release certification (still OPEN)
+- Standalone neural TTS integration, high-quality female/male voice packs, clear redistribution licenses.
+- Hindi/Hinglish pronunciation and tested voice quality on low and high RAM A52s variants.
+- Native LLM CPU inference latency + 100-turn soak tests and device thermal/battery behavior.
+- Real Samsung Text Call role/send controls and independently verified two-way caller voice delivery.
+- Accessibility, privacy, Play policy, design QA, crashes and external beta release acceptance.
+
+## Previous release history
 # CallCompanion v0.8.1 — Qwen CPU responsiveness fix
 
 Fix for v0.8 apparently getting stuck on "Offline Qwen is thinking on CPU…" on Galaxy A52s 5G:
