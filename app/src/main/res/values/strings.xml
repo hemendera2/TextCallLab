@@ -1,0 +1,3 @@
+<resources>
+    <string name="service_description">Only inspects Samsung in-call interface after you manually start Bixby Text Call. Disabled by default; no network access.</string>
+</resources>

@@ -1,0 +1,37 @@
+TEXTCALL LAB: APK BUILD WITHOUT A PC
+===================================
+IMPORTANT: This ZIP is SOURCE CODE. It is NOT an APK. This experimental app is NOT a fully conversational AI.
+
+1) Download TextCallLab-A52s-prototype.zip to your Samsung phone.
+2) Install Termux from official F-Droid link: https://f-droid.org/en/packages/com.termux/
+3) Create / sign in to a free GitHub account.
+4) In Termux enter these lines one at a time:
+
+pkg update
+pkg install git gh unzip
+termux-setup-storage
+unzip "$HOME/storage/downloads/TextCallLab-A52s-prototype.zip" -d "$HOME"
+cd "$HOME/TextCallLab"
+git config --global user.name "YOUR NAME"
+git config --global user.email "YOUR GITHUB EMAIL"
+git init -b main
+git add .
+git commit -m "Initial Samsung Text Call prototype"
+gh auth login
+# Finish GitHub device code login in your phone browser; choose GitHub.com / HTTPS
+gh repo create TextCallLab --public --source=. --remote=origin --push
+
+5) Open the repository on github.com in phone browser -> Actions -> Build Android APK.
+   The push should launch the action automatically. If not, tap Run workflow.
+6) On the finished run, find Artifacts -> TextCallLab-debug-apk -> download ZIP.
+7) Extract artifact ZIP in My Files, then install app-debug.apk.
+8) TextCall Lab -> Open Accessibility Settings -> enable service.
+   If permission is blocked on Samsung, Settings -> Apps -> TextCall Lab -> three dots -> Allow restricted settings (if shown).
+9) In app: enable Monitor; leave AUTO-SEND OFF. Test via native Bixby Text Call with someone you trust.
+10) After call, tap Refresh diagnostics. If Samsung UI exposes caller text resource IDs, we can investigate actual auto-reply.
+
+GitHub public repository source files will be visible to others. Do NOT add caller private data/passwords.
+No paid AI API. GitHub free standard public runners under GitHub's current terms.
+Data and ordinary telecom rates may still apply. Android/APK signing and security restrictions apply.
+
+POTENTIAL BLOCKER: Samsung may not expose transcribed text or SEND button through Accessibility on your firmware. The user must test this. This is an unverified prototype.
