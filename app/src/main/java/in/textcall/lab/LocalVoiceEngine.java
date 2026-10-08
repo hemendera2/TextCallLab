@@ -76,13 +76,22 @@ final class LocalVoiceEngine {
             ready = result == TextToSpeech.SUCCESS && tts != null;
             offline.clear();
             if (ready) {
-                String actual = tts.getCurrentEngine();
-                activeEngine = actual == null ? "" : actual;
-                // Android TextToSpeech may silently fall back to the system engine.
-                // Warn instead of misrepresenting this as a working neural engine.
-                if (!requested.isEmpty() && !requested.equals(activeEngine)) {
+                // Android exposes the default engine, but no getCurrentEngine().
+                // An explicit engine package is a request, not proof of synthesis.
+                String systemDefault = tts.getDefaultEngine();
+                activeEngine = requested.isEmpty()
+                        ? (systemDefault == null ? "" : systemDefault) : requested;
+                boolean installed = requested.isEmpty();
+                if (!requested.isEmpty()) {
+                    try {
+                        for (TextToSpeech.EngineInfo e : tts.getEngines()) {
+                            if (requested.equals(e.name)) { installed = true; break; }
+                        }
+                    } catch (Exception ignored) { }
+                }
+                if (!installed) {
                     ready = false;
-                    update("Requested speech engine not connected. Android used: " + activeEngine);
+                    update("Requested TTS engine package not installed: " + requested);
                 } else {
                     try {
                         Set<Voice> listed = tts.getVoices();
@@ -97,8 +106,8 @@ final class LocalVoiceEngine {
                         offline.sort(Comparator.comparingInt((Voice v) -> -v.getQuality())
                                 .thenComparing(v -> v.getLocale().getDisplayName(Locale.ENGLISH))
                                 .thenComparing(Voice::getName));
-                        update("Speech engine connected • " + offline.size()
-                                + " installed offline speaker(s) available");
+                        update("Speech engine initialized (audio still untested) • "
+                                + offline.size() + " offline speaker(s) listed");
                     } catch (Exception error) {
                         ready = false;
                         update("Voice list could not load: " + error.getClass().getSimpleName());
