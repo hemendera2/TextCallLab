@@ -147,7 +147,7 @@ public final class MainActivity extends Activity {
         }
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Offline scripted reply (NOT a call)")
-                .setMessage(answer + "\\n\\nTap PLAY VOICE to hear it from this phone's speaker. No microphone is used.")
+                .setMessage(answer + "\n\nTap PLAY VOICE to hear it from this phone's speaker. No microphone is used.")
                 .setPositiveButton("PLAY VOICE", (dialog, which) -> speakLocally(answer))
                 .setNegativeButton("CLOSE", null)
                 .show();
