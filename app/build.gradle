@@ -11,8 +11,8 @@ android {
         applicationId 'in.textcall.lab'
         minSdk 29
         targetSdk 35
-        versionCode 9
-        versionName '0.8.1-qwen-speed-fix'
+        versionCode 10
+        versionName '0.9-kallvo-voice-studio'
         externalNativeBuild {
             cmake {
                 cppFlags '-O3 -std=c++17'
