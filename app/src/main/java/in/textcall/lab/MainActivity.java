@@ -176,8 +176,42 @@ public final class MainActivity extends Activity {
                 "Metadata-only diagnostics. No call transcripts are saved."));
         space(active, 8);
         active.addView(toggle("Floating call shortcut (experimental)", Prefs.FLOATING,
-                "Shows voice presets on recognized Samsung call screens. It does not answer calls."));
+                "Shows AI Attend button on a recognized Samsung call screen."));
+        space(active, 8);
+        active.addView(toggle("Automatically try Samsung Text Call", Prefs.AUTO_ATTEND,
+                "Experimental: may attempt Bixby Text Call for all incoming calls. OFF by default."));
+        space(active, 8);
+        active.addView(toggle("Auto-reply to confirmed caller text", Prefs.LIVE_REPLY,
+                "Experimental: role-labeled caller bubble and exact Send control required."));
+        space(active, 8);
+        active.addView(toggle("Save encrypted category-only call brief", Prefs.SAVE_BRIEF,
+                "Store topic and next action; no caller name/number or raw transcript."));
+        space(active, 12);
+        active.addView(text("IMPORTANT: NOT YET TESTED on this A52s. Unknown Samsung controls fail closed. Test with consenting callers only. Real caller hears Samsung Bixby, not the in-app voice preset.", 12, SUB, false));
         body.addView(active);
+        space(body, 14);
+        LinearLayout brief = card();
+        brief.addView(text("MY SECRETARY BRIEF", 11, BLUE, true));
+        space(brief, 6);
+        brief.addView(text("Last encrypted call note", 18, NAVY, true));
+        space(brief, 9);
+        TextView latest = text(new PrivateBriefStore(this).read(), 13, NAVY, false);
+        brief.addView(latest);
+        space(brief, 8);
+        brief.addView(action("View Samsung bridge diagnostics", Color.rgb(234, 241, 255), BLUE, () -> {
+            String status = p.getString(Prefs.STATUS, "No Samsung test event yet.");
+            String diagnostic = p.getString(Prefs.DIAGNOSTICS, "No structural diagnostic available.");
+            new AlertDialog.Builder(this).setTitle("Samsung UI status — no raw call content")
+                    .setMessage(status + "\n\n" + diagnostic)
+                    .setPositiveButton("Close", null).show();
+        }));
+        space(brief, 7);
+        brief.addView(action("Erase encrypted brief", Color.rgb(246, 248, 252), NAVY, () -> {
+            new PrivateBriefStore(this).clear();
+            latest.setText("No call brief saved yet.");
+            toast("Brief erased.");
+        }));
+        body.addView(brief);
         space(body, 16);
 
         LinearLayout next = card();
@@ -199,8 +233,8 @@ public final class MainActivity extends Activity {
         truth.addView(statusRow("Offline scripted reply", "Available", true));
         truth.addView(statusRow("Offline speech preview", voiceInitialized ? "Available with installed voice" : "Voice engine unavailable / loading", voiceInitialized));
         truth.addView(statusRow("On-device voice conversation", "Talk tab: experimental offline STT + rules + TTS", true));
-        truth.addView(statusRow("SIM-call AI takeover", "Not supported by Android app", false));
-        truth.addView(statusRow("Human-level generative AI", "Not included in this build", false));
+        truth.addView(statusRow("Samsung call automation", "Experimental, A52s live test pending", false));
+        truth.addView(statusRow("Offline generative model", "Not installed — scripted replies only", false));
         body.addView(truth);
     }
 
@@ -524,7 +558,7 @@ public final class MainActivity extends Activity {
         status.addView(statusRow("Microphone permission", "Only for opt-in, in-app speech recognition; no recording saved", true));
         status.addView(statusRow("No contacts / SMS / call history", "Enforced in manifest", true));
         status.addView(statusRow("Samsung-only screen probe", "Opt-in, metadata only", true));
-        status.addView(statusRow("Automatically send caller messages", "Permanently disabled", true));
+        status.addView(statusRow("Automatic Samsung call replies", "Disabled by default, experimental opt-in", false));
         status.addView(statusRow("Samsung Text Call processing", "Separate Samsung service", false));
         body.addView(status);
         space(body, 14);
