@@ -36,6 +36,15 @@ jobs:
           done
           echo "Android SDK/NDK installation failed after retries" >&2
           exit 1
+      - name: Fetch audited Android neural TTS runtime
+        run: |
+          set -euo pipefail
+          mkdir -p app/libs
+          curl --fail --location --retry 3 --connect-timeout 25 \
+            -o app/libs/sherpa-onnx-1.13.3.aar \
+            'https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.3/sherpa-onnx-1.13.3.aar'
+          echo '243ad797a3b6e75ebbeaf7a2ab4aec0777e7d71b730685abb762a120940b07b6  app/libs/sherpa-onnx-1.13.3.aar' | sha256sum -c -
+          unzip -l app/libs/sherpa-onnx-1.13.3.aar | grep -F 'jni/arm64-v8a/libsherpa-onnx-jni.so'
       - name: Fetch pinned llama.cpp sources
         run: |
           set -euo pipefail
