@@ -102,6 +102,72 @@ public final class LocalModel {
             }
         });
     }
+    /** Official small Qwen GGUF: install inside KALLVO without Termux. Network used ONLY here. */
+    private static final String MODEL_URL =
+        "https://huggingface.co/lmstudio-community/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf";
+    private static final String MODEL_SHA =
+        "cd47557a67d7e8f2891d98b5e1dbf2988544569fdf4f1bdb30e92b71aa61b548";
+    private volatile boolean downloading;
+    public boolean isDownloading(){return downloading;}
+    public void downloadRecommended(Context context, Callback callback) {
+        if(downloading) {callback.done(false,"Model download already in progress");return;}
+        Context app=context.getApplicationContext();
+        downloading=true;
+        serial.execute(()->{
+            File dest=modelFile(app);
+            File tmp=new File(dest.getAbsolutePath()+".download");
+            try {
+                if(loaded){nativeUnload();loaded=false;}
+                java.net.HttpURLConnection c=null;
+                try{
+                    long have=tmp.exists()?tmp.length():0L;
+                    if(have>520_000_000L){tmp.delete();have=0;}
+                    c=(java.net.HttpURLConnection)new java.net.URL(MODEL_URL).openConnection();
+                    c.setConnectTimeout(25000);c.setReadTimeout(30000);
+                    c.setInstanceFollowRedirects(true);
+                    if(have>0)c.setRequestProperty("Range","bytes="+have+"-");
+                    int code=c.getResponseCode();
+                    if(code!=200&&code!=206)throw new Exception("Download error HTTP "+code);
+                    if(code!=206)have=0;
+                    long size=have+c.getContentLengthLong();
+                    if(size>520_000_000L)throw new Exception("Unexpected model size");
+                    try(java.io.RandomAccessFile file=new java.io.RandomAccessFile(tmp,"rw");
+                        java.io.InputStream in=c.getInputStream()){
+                        if(have==0)file.setLength(0);
+                        else file.seek(have);
+                        byte[] buffer=new byte[65536];int n;long total=have;
+                        while((n=in.read(buffer))!=-1){
+                            total+=n;if(total>520_000_000L)throw new Exception("Invalid model size");
+                            file.write(buffer,0,n);
+                            if(size>0)status="Downloading offline Hindi AI: "+(100*total/size)+"%";
+                        }
+                    }
+                }finally{if(c!=null)c.disconnect();}
+                status="Verifying Qwen GGUF checksum…";
+                java.security.MessageDigest sha=java.security.MessageDigest.getInstance("SHA-256");
+                try(java.io.FileInputStream in=new java.io.FileInputStream(tmp)){
+                    byte[] buffer=new byte[65536];int n;
+                    while((n=in.read(buffer))!=-1)sha.update(buffer,0,n);
+                }
+                StringBuilder actual=new StringBuilder();
+                for(byte b:sha.digest())actual.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
+                if(!MODEL_SHA.equalsIgnoreCase(actual.toString())) {
+                    tmp.delete();throw new Exception("Model SHA-256 mismatch");
+                }
+                try(java.io.RandomAccessFile reader=new java.io.RandomAccessFile(tmp,"r")){
+                    if(reader.readInt()!=0x47475546)throw new Exception("File is not GGUF");
+                }
+                if(dest.exists()&&!dest.delete())throw new Exception("Cannot replace old GGUF");
+                if(!tmp.renameTo(dest))throw new Exception("Unable to save downloaded model");
+                status="Offline Qwen3 0.6B installed • load model in Talk";
+                callback.done(true,status);
+            }catch(Exception error){
+                status="AI download failed: "+error.getMessage();
+                callback.done(false,status);
+            }finally{downloading=false;}
+        });
+    }
+
     /** Release loaded GGUF without uninstalling the app; queued behind inference. */
     public void unload(Callback callback) {
         cancel();
