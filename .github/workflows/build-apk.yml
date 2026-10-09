@@ -15,8 +15,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
@@ -59,9 +59,10 @@ jobs:
           git fetch --depth 1 origin c35b66744f13cb0dcc476af063e112122eee9355
           git checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "c35b66744f13cb0dcc476af063e112122eee9355"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.7'
+          cache-provider: basic
       - name: Privacy regression checks
         run: bash tools/test-privacy.sh
       - name: Offline response regression tests
@@ -102,6 +103,8 @@ jobs:
             exit 1
           fi
           echo "Android lint errors: NONE"
+          echo "--- FULL ANDROID LINT REPORT (WARNINGS MUST BE REVIEWED) ---"
+          cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
           # Report nonfatal warnings as evidence; never claim clean lint if warnings remain.
           grep -E "^[0-9]+ errors?, [0-9]+ warnings?" app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt || true
       - name: Verify both native inference engines in APK
@@ -120,7 +123,7 @@ jobs:
             echo "::warning::This APK is signed with a temporary key; a successful build is NOT an upgrade-safe release."
           fi
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.KALLVO_ARTIFACT_NAME }}
           path: app/build/outputs/apk/debug/app-debug.apk
