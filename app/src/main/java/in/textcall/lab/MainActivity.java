@@ -216,7 +216,7 @@ public final class MainActivity extends Activity {
         space(brief, 7);
         brief.addView(action("Erase encrypted brief", Color.rgb(246, 248, 252), NAVY, () -> {
             new PrivateBriefStore(this).clear();
-            latest.setText("No call brief saved yet.");
+            latest.setText(getString(R.string.kallvo_no_call_brief));
             toast("Brief erased.");
         }));
         body.addView(brief);
@@ -268,7 +268,7 @@ public final class MainActivity extends Activity {
         }));
         space(model, 7);
         model.addView(action("2 · Load offline AI into memory", BLUE, Color.WHITE, () -> {
-            modelStatus.setText("Loading may take time on this device. Please wait…");
+            modelStatus.setText(getString(R.string.kallvo_loading_gf));
             LocalModel.get().load(this, (ok, msg) -> runOnUiThread(() -> {
                 modelStatus.setText(msg);
                 toast(msg);
@@ -586,14 +586,14 @@ public final class MainActivity extends Activity {
         character.addView(styles);
         space(character, 13);
         int speed = p.getInt(Prefs.SPEED, 100);
-        TextView speedLabel = text("Speech pace  ·  " + speed + "%", 12, SUB, true);
+        TextView speedLabel = text(getString(R.string.kallvo_speech_pace,speed), 12, SUB, true);
         character.addView(speedLabel);
         SeekBar seek = new SeekBar(this);
         seek.setMax(50); seek.setProgress(speed - 75);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar b, int progress, boolean fromUser) {
                 int value = 75 + progress;
-                speedLabel.setText("Speech pace  ·  " + value + "%");
+                speedLabel.setText(MainActivity.this.getString(R.string.kallvo_speech_pace,value));
                 if (fromUser) p.edit().putInt(Prefs.SPEED, value).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar b) { }
@@ -712,7 +712,7 @@ public final class MainActivity extends Activity {
                         .setNegativeButton("Cancel", null)
                         .setPositiveButton("Delete", (dialog, which) -> {
                             voice.stop();
-                            p.edit().clear().commit();
+                            p.edit().clear().apply();
                             p = Prefs.get(this);
                             new PrivateBriefStore(this).clear();
                             previewReply = "";
@@ -867,7 +867,14 @@ public final class MainActivity extends Activity {
     /** Purely decorative in-app hero graphic drawn locally (no image downloads). */
     static final class SignalArt extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        SignalArt(Activity activity) { super(activity); }
+        private Shader cachedGradient;
+        SignalArt(android.content.Context context) { super(context); }
+        @Override protected void onSizeChanged(int w,int h,int oldw,int oldh) {
+            super.onSizeChanged(w,h,oldw,oldh);
+            float cx=w*.68f, cy=h*.53f;
+            cachedGradient=new LinearGradient(cx-55,cy-60,cx+50,cy+65,
+                    Color.rgb(132,237,245),Color.rgb(70,126,253),Shader.TileMode.CLAMP);
+        }
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             float w = getWidth(), h = getHeight();
@@ -883,8 +890,7 @@ public final class MainActivity extends Activity {
             }
             paint.setStyle(Paint.Style.FILL);
             paint.setAlpha(255);
-            paint.setShader(new LinearGradient(cx - 55, cy - 60, cx + 50, cy + 65,
-                    Color.rgb(132, 237, 245), Color.rgb(70, 126, 253), Shader.TileMode.CLAMP));
+            paint.setShader(cachedGradient);
             canvas.drawCircle(cx, cy, h * .19f, paint);
             paint.setShader(null);
             paint.setColor(Color.WHITE);

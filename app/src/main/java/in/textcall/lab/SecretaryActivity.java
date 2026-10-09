@@ -507,7 +507,7 @@ public final class SecretaryActivity extends Activity {
             box.addView(newTask);
             pad(box,8);
             Switch importantToggle=new Switch(this);
-            importantToggle.setText("Important");
+            importantToggle.setText(getString(R.string.kallvo_task_important));
             importantToggle.setTextSize(13);
             importantToggle.setTextColor(INK);
             box.addView(importantToggle);
@@ -561,7 +561,7 @@ public final class SecretaryActivity extends Activity {
         }));
         gapCard(frame,support);
         Switch theme=new Switch(this);
-        theme.setText("Dark mode");
+        theme.setText(getString(R.string.kallvo_dark_mode));
         theme.setTextColor(INK);
         theme.setTextSize(15);
         theme.setPadding(dp(12),dp(12),dp(12),dp(12));
@@ -605,7 +605,7 @@ public final class SecretaryActivity extends Activity {
                             if("voice".equals(detail))show();
                             toast(msg);
                         }));
-                        if(voiceHealthView!=null)voiceHealthView.setText("Preparing download…");
+                        if(voiceHealthView!=null)voiceHealthView.setText(getString(R.string.kallvo_preparing_download));
                     }).show();
             }));
         }else{
@@ -678,7 +678,7 @@ public final class SecretaryActivity extends Activity {
             .setMessage("One-time download ~484 MB from Hugging Face. File is verified with SHA-256, then runs offline. Mobile data may be charged by your carrier. Qwen3 0.6B is smaller, not guaranteed faster or more accurate than the installed model.")
             .setNegativeButton("Cancel",null)
             .setPositiveButton("Install",(d,w)->{
-                if(target!=null)target.setText("Downloading AI…");
+                if(target!=null)target.setText(getString(R.string.kallvo_downloading_ai));
                 LocalModel.get().downloadRecommended(this,(ok,msg)->runOnUiThread(()->{
                     callState=msg;
                     if(target!=null)target.setText(msg);
@@ -744,7 +744,7 @@ public final class SecretaryActivity extends Activity {
             if(thinking)return;
             thinking=true;
             long id=++generationId;
-            reading.setText("Testing CPU model with 12-second limit…");
+            reading.setText(getString(R.string.kallvo_benchmark_running));
             LocalModel.get().reply("Owner","","Be brief",new ArrayList<>(),
                 "Hello, how are you?",(reply,error,millis)->runOnUiThread(()->{
                 if(id!=generationId)return;
@@ -757,7 +757,7 @@ public final class SecretaryActivity extends Activity {
             }));
             ui.postDelayed(()->{
                 if(thinking && id==generationId)
-                    reading.setText("CPU status: "+LocalModel.get().progress());
+                    reading.setText(getString(R.string.kallvo_cpu_status,LocalModel.get().progress()));
             },3000);
         }));
         pad(measure,12);
@@ -897,7 +897,7 @@ public final class SecretaryActivity extends Activity {
                     if(!new SecretaryTaskStore(this).eraseAll()){
                         toast("Reset blocked: could not clear encrypted tasks");return;
                     }
-                    prefs.edit().clear().commit();
+                    prefs.edit().clear().apply();
                     prefs=Prefs.get(this);
                     resetChat();
                     detail="";

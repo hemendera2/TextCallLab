@@ -439,18 +439,18 @@ public final class BixbyAccessibilityService extends AccessibilityService {
             panel.setPadding(dp(13),dp(11),dp(13),dp(11));
             panel.setBackground(background(Color.rgb(16,31,60)));
             TextView heading = new TextView(this);
-            heading.setText("◉  CALLCOMPANION");
+            heading.setText(getString(R.string.kallvo_overlay_title));
             heading.setTextColor(Color.WHITE);
             heading.setTextSize(14);
             panel.addView(heading);
             TextView note = new TextView(this);
-            note.setText("Samsung Text Call • experimental");
+            note.setText(getString(R.string.kallvo_overlay_note));
             note.setTextColor(Color.rgb(197,214,235));
             note.setTextSize(11);
             panel.addView(note);
 
             Button attend = new Button(this);
-            attend.setText("Try AI Attend (Bixby)");
+            attend.setText(getString(R.string.kallvo_overlay_attend));
             attend.setAllCaps(false);
             attend.setOnClickListener(v -> {
                 autoWindowEnd = SystemClock.elapsedRealtime() + 7000L;
@@ -460,17 +460,17 @@ public final class BixbyAccessibilityService extends AccessibilityService {
             panel.addView(attend);
 
             Button open = new Button(this);
-            open.setText("App / call brief");
+            open.setText(getString(R.string.kallvo_overlay_open));
             open.setAllCaps(false);
             open.setOnClickListener(v -> {
                 removePanel();
-                Intent intent = new Intent(this, MainActivity.class);
+                Intent intent = new Intent(this, SecretaryActivity.class);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                 startActivity(intent);
             });
             panel.addView(open);
             Button dismiss = new Button(this);
-            dismiss.setText("Dismiss");
+            dismiss.setText(getString(R.string.kallvo_overlay_dismiss));
             dismiss.setAllCaps(false);
             dismiss.setOnClickListener(v -> { dismissed = true; removePanel(); });
             panel.addView(dismiss);

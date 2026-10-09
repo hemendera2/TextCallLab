@@ -1,3 +1,17 @@
 <resources>
     <string name="service_description">Only inspects Samsung in-call interface after you manually start Bixby Text Call. Disabled by default; no network access.</string>
+    <string name="kallvo_overlay_title">◉  KALLVO</string>
+    <string name="kallvo_overlay_note">Samsung Text Call • experimental</string>
+    <string name="kallvo_overlay_attend">Try AI Attend (Bixby)</string>
+    <string name="kallvo_overlay_open">Open KALLVO / call follow-ups</string>
+    <string name="kallvo_overlay_dismiss">Dismiss</string>
+    <string name="kallvo_no_call_brief">No call brief saved yet.</string>
+    <string name="kallvo_loading_gf">Loading may take time on this device. Please wait…</string>
+    <string name="kallvo_speech_pace">Speech pace · %1$d%%</string>
+    <string name="kallvo_task_important">Important</string>
+    <string name="kallvo_dark_mode">Dark mode</string>
+    <string name="kallvo_preparing_download">Preparing download…</string>
+    <string name="kallvo_downloading_ai">Downloading AI…</string>
+    <string name="kallvo_benchmark_running">Testing CPU model with 12-second limit…</string>
+    <string name="kallvo_cpu_status">CPU status: %1$s</string>
 </resources>

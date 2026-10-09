@@ -38,7 +38,7 @@ final class Prefs {
             p.edit().remove(DIAGNOSTICS).remove(STATUS)
                     .putBoolean(ENABLED, false)
                     .putBoolean(AUTO_SEND, false)
-                    .putBoolean(SAFE_MIGRATED, true).commit();
+                    .putBoolean(SAFE_MIGRATED, true).apply();
         }
         return p;
     }

@@ -15,6 +15,9 @@ for permission in READ_SMS READ_CONTACTS READ_CALL_LOG READ_PHONE_STATE SYSTEM_A
   fi
 done
 grep -Fq 'android:allowBackup="false"' "$manifest"
+grep -Fq 'android:dataExtractionRules="@xml/data_extraction_rules"' "$manifest"
+grep -Fq '<device-transfer>' app/src/main/res/xml/data_extraction_rules.xml
+grep -Fq '<exclude domain="sharedpref" path="." />' app/src/main/res/xml/data_extraction_rules.xml
 grep -Fq 'android:packageNames="com.samsung.android.incallui"' "$access"
 grep -Fq 'CallTurnGuard.isIncoming' "$service"
 grep -Fq 'CallTurnGuard.safeSend' "$service"
