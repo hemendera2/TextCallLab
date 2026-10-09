@@ -83,12 +83,18 @@ jobs:
             echo "KALLVO_ANDROID_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
             echo "KALLVO_ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
             echo "KALLVO_ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "KALLVO_ARTIFACT_NAME=KALLVO-stable-signed-APK" >> "$GITHUB_ENV"
+            echo "KALLVO_SIGNING_MODE=stable" >> "$GITHUB_ENV"
             echo "Stable signing identity restored from GitHub encrypted secrets."
           else
-            echo "::warning::Using per-run DEBUG signing. This APK may not update an earlier APK; uninstalling erases downloaded AI/voice packs. Configure the four KALLVO_ANDROID_* signing secrets for data-preserving upgrades."
+            echo "KALLVO_ARTIFACT_NAME=KALLVO-UNSTABLE-debug-do-NOT-upgrade" >> "$GITHUB_ENV"
+            echo "KALLVO_SIGNING_MODE=temporary-debug" >> "$GITHUB_ENV"
+            echo "::warning::TEMPORARY DEBUG APK ONLY. DO NOT INSTALL FOR NORMAL USE: signing key changes on a new runner. Configure all four KALLVO_ANDROID_* signing secrets for data-preserving upgrades."
           fi
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Android lint audit
+        run: gradle --no-daemon lintDebug
       - name: Verify both native inference engines in APK
         run: |
           set -euo pipefail
@@ -98,10 +104,16 @@ jobs:
           grep -Fq 'lib/arm64-v8a/libcallcompanion_llm.so' /tmp/kallvo-apk-filelist.txt
           grep -Fq 'lib/arm64-v8a/libsherpa-onnx-jni.so' /tmp/kallvo-apk-filelist.txt
           echo 'PASS: GGUF LLM + standalone Supertonic neural TTS native engines packaged.'
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/kallvo-signing.txt
+          sha256sum "$APK" | tee /tmp/kallvo-apk-sha256.txt
+          echo "Signing mode: $KALLVO_SIGNING_MODE"
+          if [ "$KALLVO_SIGNING_MODE" = "temporary-debug" ]; then
+            echo "::warning::This APK is signed with a temporary key; a successful build is NOT an upgrade-safe release."
+          fi
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: TextCallLab-debug-apk
+          name: ${{ env.KALLVO_ARTIFACT_NAME }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7

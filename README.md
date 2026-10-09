@@ -1,5 +1,14 @@
 # KALLVO v1.0.1 — actual setup and navigation repairs
 
+## CURRENT INSTALL SAFETY (9 October 2026)
+- Do **not** reinstall or uninstall KALLVO from an experimental Actions build. Without repository-managed persistent signing, the generated APK carries an ephemeral debug signature and cannot guarantee upgrade/data preservation.
+- New builds label their artifacts `KALLVO-UNSTABLE-debug-do-NOT-upgrade` when signing secrets are absent; only `KALLVO-stable-signed-APK` indicates consistent owner-provided signing (still requires a matching certificate for any already installed version).
+- SDK/NDK/CMake, sherpa-onnx AAR and llama.cpp sources are **GitHub Actions runner dependencies**. No terminal, Termux or model framework install is needed on the phone; the in-app AI/voice packs are explicit one-time downloads.
+- Latest code has two bottom tabs, Assistant and Settings. A call-facing custom voice, reliable automatic carrier call answering, push reminders and real-phone Hindi acoustic quality are **not certified**. Follow-ups are manual, encrypted and deletable in Privacy.
+- Android lint and packaging tests are CI gates; real handset acceptance and signature continuity remain separate gates. Older directions below are archival only, NOT current install advice.
+
+
+
 - Startup opens directly on **Assistant**, not an otherwise empty promotional Home. **Assistant / Settings** are the only bottom tabs. Android Back (including Android 13+ gesture callbacks) returns subpages to Settings, then Assistant; Back from Assistant minimizes KALLVO.
 - A previously saved app-private AI model is **reloaded in the background on next app start**. Importing/downloaded AI now also loads itself after completion; there is no need for another download or a second "load" step. Saved GGUF installation and loaded RAM state remain separate.
 - GGUF replacement is verified before replacing the previous file, avoiding deletion of a valid model on incomplete download/import. Voice playback waits for Android AudioTrack's actual playback head instead of sleeping for total audio duration again.

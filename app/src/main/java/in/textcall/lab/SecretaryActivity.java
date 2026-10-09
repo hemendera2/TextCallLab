@@ -297,14 +297,15 @@ public final class SecretaryActivity extends Activity {
             LinearLayout item=vertical();
             item.setGravity(Gravity.CENTER);
             item.setPadding(dp(5),dp(7),dp(5),dp(7));
-            item.setBackground(shape(tab==i?PALE:WHITE,13,0));
-            TextView ico=text(symbols[i],21,tab==i?BLUE:SOFT,true);
+            item.setBackground(shape(tab==selected?PALE:WHITE,13,0));
+            TextView ico=text(symbols[i],21,tab==selected?BLUE:SOFT,true);
             ico.setGravity(Gravity.CENTER);
             item.addView(ico,new LinearLayout.LayoutParams(-1,dp(28)));
-            TextView title=text(names[i],12,tab==i?BLUE:SOFT,tab==i);
+            TextView title=text(names[i],12,tab==selected?BLUE:SOFT,tab==selected);
             title.setGravity(Gravity.CENTER);
             item.addView(title,new LinearLayout.LayoutParams(-1,dp(24)));
             item.setOnClickListener(v->{
+                if(tab==selected && detail.isEmpty())return;
                 stopTurn();
                 tab=selected;
                 detail="";
@@ -578,7 +579,7 @@ public final class SecretaryActivity extends Activity {
     private void backTitle(String eyebrow,String title) {
         TextView back=text("‹  Settings",13,BLUE,true);
         back.setPadding(0,dp(3),0,dp(15));
-        back.setOnClickListener(v->{detail="";show();});
+        back.setOnClickListener(v->{stopTurn();detail="";tab=2;show();});
         frame.addView(back);
         section(frame,eyebrow,title);
         pad(frame,14);
@@ -871,6 +872,16 @@ public final class SecretaryActivity extends Activity {
             prefs.edit().remove(Prefs.DIAGNOSTICS).remove(Prefs.STATUS).apply();
             toast("Diagnostics erased");
         }));
+        pad(notes,8);
+        notes.addView(press("Erase all follow-up tasks",false,()->new AlertDialog.Builder(this)
+                .setTitle("Permanently erase all tasks?")
+                .setMessage("Your encrypted follow-ups will be deleted from this phone. This cannot be undone.")
+                .setNegativeButton("Cancel",null)
+                .setPositiveButton("Erase tasks",(d,w)->{
+                    if(new SecretaryTaskStore(this).eraseAll()){
+                        toast("Tasks erased");show();
+                    }else toast("Task deletion failed");
+                }).show()));
         gapCard(frame,notes);
 
         LinearLayout reset=card();
@@ -878,11 +889,14 @@ public final class SecretaryActivity extends Activity {
         pad(reset,9);
         reset.addView(press("Reset KALLVO settings",false,()->new AlertDialog.Builder(this)
                 .setTitle("Reset local settings?")
-                .setMessage("Delete owner profile, voice selection, call permissions toggles and summaries? Imported GGUF remains until Android app data is deleted.")
+                .setMessage("Delete profile, selected voice, call toggles, call notes and all follow-up tasks? Downloaded AI and voice packs are preserved. This cannot be undone.")
                 .setNegativeButton("Cancel",null)
                 .setPositiveButton("Reset",(d,w)->{
                     stopTurn();
                     new PrivateBriefStore(this).clear();
+                    if(!new SecretaryTaskStore(this).eraseAll()){
+                        toast("Reset blocked: could not clear encrypted tasks");return;
+                    }
                     prefs.edit().clear().commit();
                     prefs=Prefs.get(this);
                     resetChat();

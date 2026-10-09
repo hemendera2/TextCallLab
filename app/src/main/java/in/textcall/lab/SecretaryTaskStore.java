@@ -101,6 +101,8 @@ final class SecretaryTaskStore {
         all.put(item);
         save(all);
     }
+    /** Explicit privacy erase, keeps model downloads and other app settings intact. */
+    boolean eraseAll(){ return prefs().edit().clear().commit(); }
     void finish(String id) throws Exception {
         JSONArray all=read(),remaining=new JSONArray();
         boolean found=false;

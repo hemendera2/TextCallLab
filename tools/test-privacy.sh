@@ -26,6 +26,9 @@ grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/PrivateBriefStore.j
 grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/SecretaryTaskStore.java
 grep -Fq 'AES/GCM/NoPadding' app/src/main/java/in/textcall/lab/SecretaryTaskStore.java
 grep -Fq 'showActionInbox();' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+for rule in 'tab==selected?PALE:WHITE' 'tab==selected?BLUE:SOFT' 'tab==selected?BLUE:SOFT,tab==selected' 'if(tab==selected && detail.isEmpty())return;' 'eraseAll()'; do
+    grep -Fq "$rule" app/src/main/java/in/textcall/lab/SecretaryActivity.java || grep -Fq "$rule" app/src/main/java/in/textcall/lab/SecretaryTaskStore.java
+done
 grep -Fq 'AES/GCM/NoPadding' app/src/main/java/in/textcall/lab/PrivateBriefStore.java
 grep -Fq 'System.loadLibrary("callcompanion_llm")' app/src/main/java/in/textcall/lab/LocalModel.java
 grep -Fq 'getContentResolver().openInputStream' app/src/main/java/in/textcall/lab/LocalModel.java
