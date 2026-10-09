@@ -36,6 +36,8 @@ public final class LocalModel {
         nativeFailure = error;
     }
     private volatile boolean loaded;
+    private volatile boolean loading;
+    public boolean isLoading() { return loading; }
     private volatile String status = nativeAvailable ? "No offline model loaded" :
             "Native llama.cpp library unavailable (" + nativeFailure + ")";
     private LocalModel() { }
@@ -61,17 +63,23 @@ public final class LocalModel {
         File f = modelFile(context);
         return f.exists() && f.length() > 200_000_000L;
     }
+    /** Never delete the previous verified model before its replacement is complete. */
+    private static void replaceVerified(File temporary, File dest) throws Exception {
+        try {
+            java.nio.file.Files.move(temporary.toPath(), dest.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+            java.nio.file.Files.move(temporary.toPath(), dest.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
     /** Copies trusted user-chosen GGUF without loading entire file into RAM. */
     public void importUri(Context context, Uri uri, Callback callback) {
         Context app = context.getApplicationContext();
         serial.execute(() -> {
             File dest = modelFile(app);
             File temporary = new File(dest.getParentFile(), LOCAL_FILE + ".part");
-            if (loaded) {
-                nativeUnload();
-                loaded = false;
-                status = "Previous model unloaded for replacement.";
-            }
             try {
                 status = "Importing selected GGUF…";
                 long bytes = 0;
@@ -91,8 +99,8 @@ public final class LocalModel {
                     if (reader.readInt() != 0x47475546)
                         throw new IllegalArgumentException("Selected file is not a GGUF");
                 }
-                if (dest.exists() && !dest.delete()) throw new IllegalStateException("Cannot replace previous model");
-                if (!temporary.renameTo(dest)) throw new IllegalStateException("Cannot finalize model import");
+                if (loaded) { nativeUnload(); loaded = false; }
+                replaceVerified(temporary, dest);
                 status = "Imported locally: " + (bytes / (1024 * 1024)) + " MiB. Load model next.";
                 callback.done(true, status);
             } catch (Exception e) {
@@ -110,6 +118,7 @@ public final class LocalModel {
     private volatile boolean downloading;
     public boolean isDownloading(){return downloading;}
     public void downloadRecommended(Context context, Callback callback) {
+        if(isImported(context)) { callback.done(true,"AI already installed. Reopen KALLVO to load it; no download needed."); return; }
         if(downloading) {callback.done(false,"Model download already in progress");return;}
         Context app=context.getApplicationContext();
         downloading=true;
@@ -117,7 +126,6 @@ public final class LocalModel {
             File dest=modelFile(app);
             File tmp=new File(dest.getAbsolutePath()+".download");
             try {
-                if(loaded){nativeUnload();loaded=false;}
                 java.net.HttpURLConnection c=null;
                 try{
                     long have=tmp.exists()?tmp.length():0L;
@@ -157,8 +165,8 @@ public final class LocalModel {
                 try(java.io.RandomAccessFile reader=new java.io.RandomAccessFile(tmp,"r")){
                     if(reader.readInt()!=0x47475546)throw new Exception("File is not GGUF");
                 }
-                if(dest.exists()&&!dest.delete())throw new Exception("Cannot replace old GGUF");
-                if(!tmp.renameTo(dest))throw new Exception("Unable to save downloaded model");
+                if(loaded){nativeUnload();loaded=false;}
+                replaceVerified(tmp,dest);
                 status="Offline Qwen3 0.6B installed • load model in Talk";
                 callback.done(true,status);
             }catch(Exception error){
@@ -178,18 +186,33 @@ public final class LocalModel {
             callback.done(true, status);
         });
     }
+    /** Restores only from the verified app-private file, never triggers network. */
+    public void loadIfPresent(Context context, Callback callback) {
+        if (!isImported(context) || loaded || downloading || loading) return;
+        load(context, callback);
+    }
     public void load(Context context, Callback callback) {
         Context app = context.getApplicationContext();
+        if (loading) { callback.done(false, "Offline AI is already loading"); return; }
+        loading = true;
+        status = "Loading saved GGUF from this phone…";
         serial.execute(() -> {
-            if (!nativeAvailable) { callback.done(false, status); return; }
-            if (loaded) { callback.done(true, "Model already loaded"); return; }
-            if (!isImported(app)) { callback.done(false, "Import GGUF from Downloads first"); return; }
-            status = "Loading GGUF into CPU inference engine…";
-            String error = nativeLoad(modelFile(app).getAbsolutePath());
-            loaded = error.isEmpty();
-            status = loaded ? "Qwen GGUF loaded locally. Ready for offline responses."
-                    : "Model load failed: " + error;
-            callback.done(loaded, status);
+            try {
+                if (!nativeAvailable) { callback.done(false, status); return; }
+                if (loaded) { callback.done(true, "Model already loaded"); return; }
+                if (!isImported(app)) { callback.done(false, "Install an AI model once in Settings"); return; }
+                String error = nativeLoad(modelFile(app).getAbsolutePath());
+                loaded = error.isEmpty();
+                status = loaded ? "Saved offline AI restored. Ready."
+                        : "Saved model could not load: " + error;
+                callback.done(loaded, status);
+            } catch (Throwable failure) {
+                loaded = false;
+                status = "Saved model could not load: " + failure.getClass().getSimpleName();
+                callback.done(false, status);
+            } finally {
+                loading = false;
+            }
         });
     }
     public void reply(String owner, String facts, String rules,

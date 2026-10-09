@@ -63,7 +63,8 @@ public final class SecretaryActivity extends Activity {
      private NeuralVoice neural;
     private LocalSpeechInput speech;
     private ConversationEngine chat;
-    private int tab=0;
+    private int tab=1;
+    private android.window.OnBackInvokedCallback systemBack;
     private String detail="";
     private String genderFilter="";
     private String callState="Ready";
@@ -83,7 +84,10 @@ public final class SecretaryActivity extends Activity {
                 ? android.R.style.Theme_Material_NoActionBar
                 : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(state);
-        tab=getIntent().getIntExtra("restore_tab",0);
+        tab=state==null ? getIntent().getIntExtra("restore_tab",1) : state.getInt("tab",1);
+        if(tab!=2) tab=1;
+        detail=state==null?"":state.getString("detail","");
+        if(tab!=2)detail="";
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(WHITE);
         getWindow().getDecorView().setSystemUiVisibility(
@@ -98,6 +102,33 @@ public final class SecretaryActivity extends Activity {
         speech=new LocalSpeechInput(this);
          resetChat();
          show();
+        if(android.os.Build.VERSION.SDK_INT>=33){
+            systemBack=this::navigateBack;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,systemBack);
+        }
+        if(LocalModel.isImported(this)) {
+            callState="Restoring saved offline AI…";
+            LocalModel.get().loadIfPresent(this,(ok,message)->runOnUiThread(()->{
+                callState=message;
+                if(!isFinishing() && !isDestroyed())show();
+            }));
+        }
+    }
+    @Override protected void onSaveInstanceState(Bundle out){
+        out.putInt("tab",tab);
+        out.putString("detail",detail);
+        super.onSaveInstanceState(out);
+    }
+    @Override public void onBackPressed(){ navigateBack(); }
+    private void navigateBack(){
+        if(!detail.isEmpty()){
+            stopTurn(); detail=""; tab=2; show();
+        }else if(tab==2){
+            stopTurn(); tab=1; show();
+        }else{
+            moveTaskToBack(true);
+        }
     }
     @Override protected void onResume() {
         super.onResume();
@@ -110,6 +141,8 @@ public final class SecretaryActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy() {
+        if(android.os.Build.VERSION.SDK_INT>=33 && systemBack!=null)
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(systemBack);
         stopTurn();
          neural.shutdown();
         super.onDestroy();
@@ -257,10 +290,10 @@ public final class SecretaryActivity extends Activity {
         LinearLayout bottom=horizontal();
         bottom.setBackgroundColor(WHITE);
         bottom.setPadding(dp(13),dp(8),dp(13),dp(11));
-        final String[] names={"Home","Talk","Settings"};
-        final String[] symbols={"⌂","◉","⚙"};
+        final String[] names={"Assistant","Settings"};
+        final String[] symbols={"◉","⚙"};
         for(int i=0;i<names.length;i++) {
-            final int selected=i;
+            final int selected=i+1;
             LinearLayout item=vertical();
             item.setGravity(Gravity.CENTER);
             item.setPadding(dp(5),dp(7),dp(5),dp(7));
@@ -290,67 +323,8 @@ public final class SecretaryActivity extends Activity {
             else if("calls".equals(detail)) showCalls();
             else if("privacy".equals(detail)) showPrivacy();
             else if("models".equals(detail)) showModels();
-        } else if(tab==0) showHome();
-        else if(tab==1) showTalk();
+        } else if(tab==1) showTalk();
         else showSettings();
-    }
-
-    private void showHome() {
-        LinearLayout hero=vertical();
-        hero.setBackground(shape(INK,23,0));
-        hero.setPadding(dp(20),dp(22),dp(20),dp(23));
-        hero.addView(text("YOUR PRIVATE SECRETARY",11,Color.rgb(174,194,255),true));
-        pad(hero,9);
-        hero.addView(text("More time for\nwhat matters.",28,WHITE,true));
-        pad(hero,9);
-        hero.addView(text("Practice a voice conversation, prepare your assistant, and review call notes.",
-                13,Color.rgb(194,204,222),false));
-        pad(hero,19);
-        TextView start=press("Try a voice conversation   →",true,()->{
-            tab=1;show();
-        });
-        start.setBackground(shape(BLUE,13,0));
-        hero.addView(start);
-        gapCard(frame,hero);
-
-        LinearLayout status=card();
-        status.addView(text("DEVICE STATUS",11,SOFT,true));
-        pad(status,12);
-        status.addView(text(LocalModel.get().isLoaded()
-                ? "●  Offline AI loaded" : "○  Offline AI not loaded",
-                15,LocalModel.get().isLoaded()?GREEN:INK,true));
-        pad(status,8);
-        status.addView(text(neural.isInstalled()
-                ? "●  Built-in Hindi neural voice installed" : "○  Hindi neural voice needs one-time setup",
-                14,neural.isInstalled()?GREEN:SOFT,false));
-        if(!neural.isInstalled()){
-            pad(status,12);
-            status.addView(press("Install Hindi voice inside KALLVO   →",true,()->{
-                tab=2;detail="voice";show();
-            }));
-        }
-        pad(status,12);
-        status.addView(text("SIM call integration · Not verified on this phone",
-                12,SOFT,false));
-        gapCard(frame,status);
-
-        sectionTitle(frame,"YOUR LAST CALL NOTE");
-        LinearLayout brief=card();
-        String summary=new PrivateBriefStore(this).read();
-        brief.addView(text(summary,14,INK,false));
-        pad(brief,12);
-        brief.addView(press("Open call setup",false,()->{tab=2;detail="calls";show();}));
-        gapCard(frame,brief);
-
-        LinearLayout row=card();
-        navRow(row,"Choose Hindi voice",neural.isInstalled()
-                ? NeuralVoice.speakerLabel(neural.speaker())+" · built-in" : "Install one-time voice pack","›",()->{
-            tab=2;detail="voice";show();
-        });
-        navRow(row,"Give your secretary context","Owner details and conversation rules","›",()->{
-            tab=2;detail="profile";show();
-        });
-        gapCard(frame,row);
     }
 
     private void showTalk() {
@@ -365,7 +339,7 @@ public final class SecretaryActivity extends Activity {
                     17,INK,true));
             pad(model,6);
             caption(model,LocalModel.isImported(this)
-                    ? "Your GGUF is on this device. Load it to start."
+                    ? "Saved on this device. KALLVO reloads it automatically when opened."
                     : "Choose the Qwen GGUF already saved in Downloads.");
             pad(model,12);
             if(!LocalModel.isImported(this)) {
@@ -377,14 +351,17 @@ public final class SecretaryActivity extends Activity {
                 model.addView(press("Use existing GGUF from Downloads",false,this::chooseGGUF));
                 pad(model,8);
             }
-            model.addView(press("Load offline model",true,()->{
-                callState="Loading offline model…";
-                show();
-                LocalModel.get().load(this,(ok,message)->runOnUiThread(()->{
-                    callState=message;
-                    if(!isFinishing()) show();
+            if(LocalModel.get().isLoading()) {
+                caption(model,"Loading saved AI into memory…");
+            }else if(LocalModel.isImported(this)) {
+                model.addView(press("Retry loading saved AI",true,()->{
+                    callState="Loading saved offline model…"; show();
+                    LocalModel.get().load(this,(ok,message)->runOnUiThread(()->{
+                        callState=message;
+                        if(!isFinishing()&&!isDestroyed()) show();
+                    }));
                 }));
-            }));
+            }
             gapCard(frame,model);
         } else {
             LinearLayout model=horizontal();
@@ -460,6 +437,14 @@ public final class SecretaryActivity extends Activity {
             stopTurn();resetChat();show();
         }));
         gapCard(frame,exchange);
+        String lastNote=new PrivateBriefStore(this).read();
+        if(!"No call brief saved yet.".equals(lastNote)){
+            LinearLayout note=card();
+            note.addView(text("LAST CALL FOLLOW-UP",11,BLUE,true));
+            pad(note,8);
+            note.addView(text(lastNote,13,INK,false));
+            gapCard(frame,note);
+        }
     }
 
     private void showSettings() {
@@ -467,7 +452,7 @@ public final class SecretaryActivity extends Activity {
         pad(frame,15);
         LinearLayout preferences=card();
         navRow(preferences,"AI model & speed",LocalModel.get().isLoaded()
-                ? "Loaded: speed needs testing" : "Load or change your GGUF",
+                ? "Offline AI ready" : LocalModel.isImported(this) ? "AI saved on phone" : "One-time setup needed",
                 "›",()->{detail="models";show();});
         navRow(preferences,"Hindi neural voice",neural.isInstalled()
                 ? NeuralVoice.speakerLabel(neural.speaker())+" · installed" : "Set up in KALLVO",
@@ -637,22 +622,25 @@ public final class SecretaryActivity extends Activity {
         options.addView(text(LocalModel.get().isLoaded() ? "Model is loaded"
                     : LocalModel.isImported(this) ? "Model imported" : "No GGUF imported",17,INK,true));
         pad(options,8);
-        caption(options,"KALLVO can download the recommended Qwen3 0.6B or import any compatible existing GGUF. Test response speed before relying on it.");
+        caption(options,"AI downloads or imports once. The saved model reloads automatically when you reopen KALLVO. Only replace it if needed.");
         pad(options,12);
         TextView aiProgress=text(LocalModel.get().status(),12,SOFT,false);
         options.addView(aiProgress);
         pad(options,10);
-        options.addView(press("Install recommended Hindi AI · ~484 MB",true,
-                ()->offerAIDownload(aiProgress)));
-        pad(options,9);
+        if(!LocalModel.isImported(this)) {
+            options.addView(press("Install recommended Hindi AI · ~484 MB",true,
+                    ()->offerAIDownload(aiProgress)));
+            pad(options,9);
+        } else {
+            caption(options,"Saved locally • no repeat download required.");
+            pad(options,9);
+        }
         options.addView(press("Choose existing GGUF file",false,()->new AlertDialog.Builder(this)
             .setTitle("Replace local AI model?")
             .setMessage("The current model will be unloaded. Your original downloaded GGUF file stays untouched.")
             .setNegativeButton("Cancel",null)
             .setPositiveButton("Choose", (d,w)->{stopTurn();chooseGGUF();}).show()));
-        pad(options,9);
-        options.addView(press("Unload model from RAM",false,()->
-            LocalModel.get().unload((ok,msg)->runOnUiThread(()->{callState=msg;show();}))));
+
         gapCard(frame,options);
         LinearLayout measure=card();
         measure.addView(text("REAL DEVICE SPEED TEST",11,BLUE,true));

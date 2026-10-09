@@ -63,7 +63,7 @@ grep -Fq '.remove(DIAGNOSTICS).remove(STATUS)' "$prefs"
 grep -Fq 'android:icon="@drawable/app_mark"' "$manifest"
 grep -Fq 'android:name=".SecretaryActivity"' "$manifest"
 grep -Fq 'android:label="KALLVO"' "$manifest"
-grep -Fq 'final String[] names={"Home","Talk","Settings"}' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'final String[] names={"Assistant","Settings"}' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'String gender = gender(voice);' "$voices"
 grep -Fq 'KEY_FEATURE_NOT_INSTALLED' "$voices"
 grep -Fq 'isNetworkConnectionRequired()' "$voices"
@@ -91,6 +91,10 @@ grep -Fq 'OfflineTtsSupertonicModelConfig' app/src/main/java/in/textcall/lab/Neu
 grep -Fq 'tts.generateWithConfig' app/src/main/java/in/textcall/lab/NeuralVoice.java
 grep -Fq 'AudioTrack' app/src/main/java/in/textcall/lab/NeuralVoice.java
 grep -Fq 'One voice. One app.' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'LocalModel.get().loadIfPresent(this' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'getOnBackInvokedDispatcher().registerOnBackInvokedCallback' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'replaceVerified(tmp,dest)' app/src/main/java/in/textcall/lab/LocalModel.java
+grep -Fq 'no repeat download required' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'mavenCentral()' settings.gradle
 grep -Fq "implementation files('libs/sherpa-onnx-1.13.3.aar')" app/build.gradle
 grep -Fq 'sha256sum -c' .github/workflows/build-apk.yml

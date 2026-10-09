@@ -292,9 +292,14 @@ final class NeuralVoice {
             }
             completedSamples=idx;
             if(epoch==speakEpoch.get()) {
-                // AudioTrack.write returns when queued, not when speakers played.
-                long millis=Math.min(15000,Math.max(0,(long)idx*1000/rate-100));
-                if(millis>0)Thread.sleep(millis);
+                // Wait for actual playback head, not the full duration again after streaming.
+                long deadline=android.os.SystemClock.elapsedRealtime()
+                        + Math.min(30000L, (long)idx*1000L/rate+2000L);
+                while(epoch==speakEpoch.get()
+                        && (player.getPlaybackHeadPosition() & 0xffffffffL)<(long)idx
+                        && android.os.SystemClock.elapsedRealtime()<deadline) {
+                    Thread.sleep(35L);
+                }
             }
         }finally{
             try{player.stop();}catch(Exception ignored){}
