@@ -518,170 +518,92 @@ public final class SecretaryActivity extends Activity {
         pad(frame,14);
     }
     private void showVoices() {
-        backTitle("VOICE STUDIO","Choose the sound.");
-        LinearLayout engine=card();
-        engine.addView(text("Speech engine",16,INK,true));
-        pad(engine,5);
-        caption(engine,"For natural voice, select an installed neural TTS engine. This voice is for in-app conversations; Samsung Bixby controls the voice heard on a SIM call.");
-        pad(engine,13);
-        TextView chosen=text(voice.activeEngine().isEmpty()
-                ? "System speech engine" : voice.activeEngine(),12,SOFT,false);
-        engine.addView(chosen);
-        pad(engine,10);
-        voiceHealthView=text(voice.lastStatus(),12,SOFT,false);
-        engine.addView(voiceHealthView);
-        pad(engine,6);
-        int music=voice.musicVolume();
-        engine.addView(text(music==0
-                ? "Media volume is MUTED. Use Volume Up during preview."
-                : music<0?"Media volume unavailable"
-                   :"Media volume: "+music+" (turn up if needed)",12,music==0?Color.rgb(191,57,36):SOFT,false));
-        pad(engine,10);
-        engine.addView(press("Reconnect speech engine",false,()->{
-            voice.useEngine(prefs.getString(Prefs.TTS_ENGINE,""),ok->runOnUiThread(()->{
-                if(!isFinishing())show();
-                if(!ok)toast("Engine unavailable; check Voice studio details.");
+        backTitle("NATURAL HINDI VOICE","One voice. One app.");
+        LinearLayout intro=card();
+        intro.addView(text("Built-in neural Hindi",18,INK,true));
+        pad(intro,7);
+        caption(intro,"10 real speaker styles, five female and five male. No separate TTS application or system voice settings.");
+        pad(intro,14);
+        voiceHealthView=text(neural.status(),13,SOFT,false);
+        intro.addView(voiceHealthView);
+        pad(intro,12);
+        if(!neural.isInstalled()) {
+            intro.addView(press("Install voice pack · ~125 MB",true,()->{
+                new AlertDialog.Builder(this)
+                    .setTitle("One-time neural voice setup")
+                    .setMessage("KALLVO downloads an open-weight Hindi Supertonic 3 model from GitHub Releases, verifies SHA-256 and stores it only in app-private storage. No caller speech or AI messages are sent to any server. Data charges may apply under your mobile plan.")
+                    .setNegativeButton("Cancel",null)
+                    .setPositiveButton("Download", (d,w)->{
+                        neural.install((ok,msg)->runOnUiThread(()->{
+                            if("voice".equals(detail))show();
+                            toast(msg);
+                        }));
+                        if(voiceHealthView!=null)voiceHealthView.setText("Preparing download…");
+                    }).show();
+            }));
+        }else{
+            intro.addView(text("✓ Voice pack installed • ready for offline playback",13,GREEN,true));
+        }
+        gapCard(frame,intro);
+
+        LinearLayout chooser=card();
+        chooser.addView(text("YOUR VOICE",11,BLUE,true));
+        pad(chooser,7);
+        TextView selected=text(NeuralVoice.speakerLabel(neural.speaker()),21,INK,true);
+        chooser.addView(selected);
+        pad(chooser,12);
+        String[] pair={"Female","Male"};
+        LinearLayout row=horizontal();
+        for(int i=0;i<2;i++){
+            final int startId=i==0?0:5;
+            TextView choice=press(pair[i]+"  "+(neural.speaker()<5?"":"").trim(),
+                    neural.speaker()/5==i,()->{
+                        neural.setSpeaker(startId);
+                        show();
+                    });
+            row.addView(choice,new LinearLayout.LayoutParams(0,dp(49),1f));
+            if(i==0)row.addView(new View(this),new LinearLayout.LayoutParams(dp(8),1));
+        }
+        chooser.addView(row);
+        pad(chooser,11);
+        chooser.addView(press("Choose speaker style  (1–5)",false,()->{
+            String[] labels=new String[5];
+            boolean female=neural.speaker()<5;
+            for(int i=0;i<5;i++)labels[i]=(female?"Female ":"Male ")+(i+1);
+            new AlertDialog.Builder(this).setTitle("Pick a voice")
+                .setSingleChoiceItems(labels,neural.speaker()%5,(dialog,which)->{
+                    neural.setSpeaker((female?0:5)+which);
+                    dialog.dismiss();
+                    show();
+                }).setNegativeButton("Cancel",null).show();
+        }));
+        pad(chooser,11);
+        chooser.addView(press("▶  Hear sample in Hindi",true,()->{
+            neural.speak("नमस्ते, मैं आपका एआई सेक्रेटरी हूँ। बताइए, मैं आपकी क्या मदद कर सकता हूँ?",
+                (ok,msg)->runOnUiThread(()->{
+                    if(voiceHealthView!=null)voiceHealthView.setText(msg);
+                    if(!ok)toast(msg);
+                }));
+        }));
+        gapCard(frame,chooser);
+
+        LinearLayout speechCard=card();
+        speechCard.addView(text("HINDI UNDERSTANDING",11,BLUE,true));
+        pad(speechCard,7);
+        caption(speechCard,"Speech recognition and voice synthesis are separate. Check if your phone has an actual on-device Hindi recognizer.");
+        pad(speechCard,12);
+        speechCard.addView(press("Check Hindi speech recognition",false,()->{
+            speech.checkHindi((msg,ok)->runOnUiThread(()->{
+                new AlertDialog.Builder(this)
+                    .setTitle(ok?"Hindi offline recognition installed":"Hindi recognition needs attention")
+                    .setMessage(msg).setPositiveButton("OK",null).show();
             }));
         }));
-        pad(engine,8);
-        engine.addView(press("Change installed engine",false,()->enginePicker()));
-        pad(engine,10);
-        engine.addView(press("Manage offline voice packs   ↗",false,this::speechSettings));
-        pad(engine,10);
-        engine.addView(press("Check offline Hindi understanding",false,()->{
-            voiceHealthView.setText("Checking installed Hindi speech recognizer…");
-            speech.checkHindi((message,installed)->runOnUiThread(()->{
-                if ("voice".equals(detail) && voiceHealthView != null) {
-                    voiceHealthView.setText(message);
-                }
-                Toast.makeText(this,message,Toast.LENGTH_LONG).show();
-            }));
-        }));
-        gapCard(frame,engine);
-
-        LinearLayout identity=card();
-        identity.addView(text("VOICE CHARACTER",11,SOFT,true));
-        pad(identity,11);
-        caption(identity,"Male / female options require an actual named speaker pack. Pitch presets do not change gender.");
-        pad(identity,12);
-        LinearLayout select=horizontal();
-        for(String kind:new String[]{"All","Female","Male"}) {
-            TextView button=pill(kind,genderFilter.equals(kind)||genderFilter.isEmpty()&&"All".equals(kind));
-            button.setOnClickListener(v->{genderFilter=kind;show();});
-            select.addView(button,new LinearLayout.LayoutParams(0,-2,1f));
-        }
-        identity.addView(select);
-        pad(identity,11);
-        String chosenId=prefs.getString(Prefs.VOICE,"");
-        if(chosenId.toLowerCase(Locale.ROOT).contains("supertonic")
-                && TTS_APP.equals(voice.activeEngine())) {
-            LinearLayout warning=vertical();
-            warning.setPadding(dp(12),dp(11),dp(12),dp(11));
-            warning.setBackground(shape(Color.rgb(255,245,229),12,0));
-            warning.addView(text("Supertonic external-app compatibility is unverified",13,INK,true));
-            pad(warning,5);
-            caption(warning,"A voice can appear in this list without VoxSherpa's Android system TTS service supporting its synthesis. Test it directly in VoxSherpa Generate. If it works there but stays silent here, choose another voice engine/model for KALLVO.");
-            identity.addView(warning);
-            pad(identity,11);
-        }
-        List<Voice> voices=voice.voices();
-        int visible=0;
-        for(Voice v:voices) {
-            String gender=LocalVoiceEngine.gender(v);
-            if(!genderFilter.isEmpty()&&!"All".equals(genderFilter)
-                    &&!genderFilter.equals(gender)) continue;
-            visible++;
-            boolean active=v.getName().equals(prefs.getString(Prefs.VOICE,""));
-            final Voice selected=v;
-            TextView pick=text((active?"●  ":"○  ")+LocalVoiceEngine.displayVoice(v),13,
-                    active?BLUE:INK,active);
-            pick.setPadding(dp(10),dp(11),dp(8),dp(11));
-            pick.setBackground(shape(active?PALE:WHITE,12,active?0:LINE));
-            pick.setOnClickListener(view->{
-                prefs.edit().putString(Prefs.VOICE,selected.getName())
-                        .putString(Prefs.LANGUAGE,selected.getLocale().toLanguageTag()).apply();
-                show();
-                if(!voice.speak(shortSample(selected.getLocale())))
-                    toast(voice.lastStatus());
-            });
-            identity.addView(pick);
-            pad(identity,7);
-        }
-        if(visible==0) {
-            caption(identity,"No matching offline speaker installed. Pick an offline neural voice pack from your speech engine.");
-        }
-        pad(identity,8);
-        identity.addView(press("▶  Test selected voice (no AI)",true,()->{
-            boolean started=voice.speak(shortSample(Locale.forLanguageTag(
-                    prefs.getString(Prefs.LANGUAGE,"hi-IN"))));
-            if(!started)toast(voice.lastStatus());
-        }));
-        pad(identity,12);
-        TextView pace=text("Speaking speed · "+prefs.getInt(Prefs.SPEED,100)+"%",12,SOFT,true);
-        identity.addView(pace);
-        SeekBar seek=new SeekBar(this);
-        seek.setMax(40);
-        seek.setProgress(Math.max(0,Math.min(40,prefs.getInt(Prefs.SPEED,100)-80)));
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar bar,int value,boolean user) {
-                if(user) prefs.edit().putInt(Prefs.SPEED,value+80).apply();
-                pace.setText("Speaking speed · "+(value+80)+"%");
-            }
-            public void onStartTrackingTouch(SeekBar b) { }
-            public void onStopTrackingTouch(SeekBar b) { }
-        });
-        identity.addView(seek);
-        gapCard(frame,identity);
-
-        LinearLayout info=card();
-        info.addView(text("Need a more human voice?",16,INK,true));
-        pad(info,8);
-        caption(info,"Piper & Kokoro are neural speech engines. Third-party app installation and voice downloads are optional; KALLVO never bundles another app's GPL code.");
-        pad(info,12);
-        info.addView(press("Open VoxSherpa and test voice directly   ↗",false,()->{
-            Intent launch=getPackageManager().getLaunchIntentForPackage(TTS_APP);
-            if(launch!=null)startActivity(launch);
-            else toast("Open VoxSherpa TTS from app drawer → Generate → test Hindi F2.");
-        }));
-        pad(info,8);
-        info.addView(press("Explore offline neural engine   ↗",false,()->{
-            try {
-                Intent open=new Intent(Intent.ACTION_VIEW,
-                        android.net.Uri.parse("market://details?id="+TTS_APP));
-                startActivity(open);
-            } catch(Exception error) {
-                toast("Search 'VoxSherpa TTS' on Google Play");
-            }
-        }));
-        gapCard(frame,info);
+        gapCard(frame,speechCard);
+        caption(frame,"The phone's Samsung Bixby voice is separate for protected SIM calls. In-app Hindi neural speech uses only KALLVO.");
     }
     private String shortSample(Locale locale) {
-        return "hi".equals(locale.getLanguage())
-                ? "नमस्ते, आपका स्वागत है।"
-                : "Hello! Welcome.";
-    }
-    private String sample(Locale locale) {
-        if("hi".equals(locale.getLanguage()))
-            return "नमस्ते! मैं आपका एआई सेक्रेटरी हूँ। बताइए, मैं आपकी क्या मदद कर सकता हूँ?";
-        return "Hello! I'm your AI secretary. How can I help you today?";
-    }
-    private void enginePicker() {
-        List<TextToSpeech.EngineInfo> options=voice.engines();
-        if(options.isEmpty()){speechSettings();return;}
-        CharSequence[] titles=new CharSequence[options.size()+1];
-        titles[0]="Use system default";
-        for(int i=0;i<options.size();i++) titles[i+1]=options.get(i).label;
-        new AlertDialog.Builder(this).setTitle("Select speech engine")
-            .setItems(titles,(dialog,which)->{
-                String packageName=which==0?"":options.get(which-1).name;
-                prefs.edit().putString(Prefs.TTS_ENGINE,packageName)
-                        .remove(Prefs.VOICE).apply();
-                voice.useEngine(packageName,ready->runOnUiThread(()->{
-                    detail="voice";
-                    show();
-                    if(!ready)toast("Engine not ready. Install a voice pack in Android settings.");
-                }));
-            }).setNegativeButton("Cancel",null).show();
+        return "hi".equals(locale.getLanguage())?"नमस्ते, आपका स्वागत है।":"Hello and welcome.";
     }
 
     private void showModels() {
@@ -907,7 +829,7 @@ public final class SecretaryActivity extends Activity {
     }
     private void beginListening() {
         if(!foreground||tab!=1||!detail.isEmpty()||thinking)return;
-        voice.stop();
+        neural.stop();
         speech.listen(prefs.getString(Prefs.SPEECH_LANGUAGE,"hi-IN"),
                 new LocalSpeechInput.Callback(){
             public void onUpdate(String state){status(state);}
@@ -961,17 +883,18 @@ public final class SecretaryActivity extends Activity {
                 }));
     }
     private void speak(String answer) {
-        if(!voice.speak(answer,()->{
-            status("Voice completed. Ready for the next question.");
-            if(listeningLoop && foreground && tab==1)beginListening();
-        },()->{
+        if(!neural.isInstalled()){
             listeningLoop=false;
-            status("Voice failed: "+voice.lastStatus()+
-                    ". Open Settings → Voice studio, then test voice without AI.");
-        })) {
-            listeningLoop=false;
-            status("Voice unavailable: "+voice.lastStatus());
+            status("Offline AI reply ready as text. Install KALLVO Hindi voice in Settings to hear it.");
+            return;
         }
+        status("Preparing built-in Hindi neural voice…");
+        neural.speak(answer,(ok,message)->runOnUiThread(()->{
+            if(!foreground)return;
+            status(message);
+            if(ok && listeningLoop && tab==1)beginListening();
+            if(!ok)listeningLoop=false;
+        }));
     }
     private void watch(long id) {
         ui.postDelayed(()->{
