@@ -17,34 +17,34 @@ public final class OfflineResponder {
         String context = ownerInstructions == null ? "" : ownerInstructions.trim();
 
         if (containsAny(t, "otp", "one time password", "password", "pin number", "upi pin", "पासवर्ड", "ओटीपी")) {
-            return "Security ke liye OTP, PIN ya password share mat kijiye. Main inhe collect nahi karta.";
+            return "कृपया ओटीपी, पिन या पासवर्ड साझा न करें। मैं यह जानकारी नहीं लेता।";
         }
         if (containsAny(t, "emergency", "ambulance", "accident", "hospital emergency", "urgent help", "इमरजेंसी")) {
-            return "Agar emergency hai, turant local emergency service se sampark kijiye. Main emergency help dispatch nahi kar sakta.";
+            return "अगर आपात स्थिति है, तो तुरंत स्थानीय आपातकालीन सेवा से संपर्क करें। मैं सहायता भेज नहीं सकता।";
         }
         if (containsAny(t, "who are you", "are you ai", "robot", "assistant", "कौन बोल", "kaun bol")) {
-            return "Main " + identity + " ka automated AI-style assistant bol raha hoon. Aap kya message dena chahenge?";
+            return "मैं " + identity + " का ऑटोमेटेड एआई असिस्टेंट बोल रहा हूँ। आप क्या संदेश देना चाहेंगे?";
         }
         if (containsAny(t, "hello", "hi ", "hey", "namaste", "good morning", "नमस्ते", "हैलो")) {
-            return "Namaste. Main " + identity + " ka automated assistant hoon. Batayiye, kis kaam se call kiya?";
+            return "नमस्ते। मैं " + identity + " का ऑटोमेटेड असिस्टेंट हूँ। बताइए, किस काम से फ़ोन किया?";
         }
         if (containsAny(t, "appointment", "meeting", "schedule", "booking", "milna", "समय", "मिलना")) {
-            return "Meeting ke liye apna naam, date aur convenient time bata dijiye. Main is call mein detail note kar raha hoon; booking confirm nahi kar sakta.";
+            return "बैठक के लिए अपना नाम, तारीख़ और सुविधाजनक समय बताएं। मैं अभी बुकिंग की पुष्टि नहीं कर सकता।";
         }
         if (containsAny(t, "price", "cost", "charge", "fees", "kitna", "rate", "कीमत", "कितने")) {
-            return "Exact price mere paas verified nahi hai. Aap kis service ke baare mein pooch rahe hain?";
+            return "मेरे पास अभी पुष्टि की हुई कीमत नहीं है। आप किस सेवा के बारे में पूछ रहे हैं?";
         }
         if (containsAny(t, "call back", "callback", "wapas call", "later", "baad mein", "वापस फोन")) {
-            return "Theek hai. Aap apna naam aur call ka reason bata dijiye. Main callback ka vaada nahi kar sakta.";
+            return "ठीक है। कृपया अपना नाम और कॉल करने का कारण बताएं। मैं कॉल-बैक का वादा नहीं कर सकता।";
         }
         if (containsAny(t, "bye", "goodbye", "thank you", "thanks", "shukriya", "धन्यवाद")) {
-            return "Call karne ke liye shukriya. Namaste.";
+            return "फ़ोन करने के लिए धन्यवाद। नमस्ते।";
         }
         if (!context.isEmpty() && containsAny(t, "business", "service", "work", "kaam", "details", "जानकारी")) {
             String contextShort = context.length() > 140 ? context.substring(0, 140) : context;
-            return "Yeh owner ki di hui jaankari hai: " + contextShort + ". Aapko kya poochna hai?";
+            return "यह मालिक की दी हुई जानकारी है: " + contextShort + "। आप क्या पूछना चाहते हैं?";
         }
-        return "Ji, main sun raha hoon. Aap thoda aur detail mein bata sakte hain?";
+        return "जी, मैं सुन रहा हूँ। क्या आप अपनी बात थोड़ी और विस्तार से बता सकते हैं?";
     }
 
     private static boolean containsAny(String target, String... options) {
