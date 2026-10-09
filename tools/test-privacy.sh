@@ -92,7 +92,9 @@ grep -Fq 'tts.generateWithConfig' app/src/main/java/in/textcall/lab/NeuralVoice.
 grep -Fq 'AudioTrack' app/src/main/java/in/textcall/lab/NeuralVoice.java
 grep -Fq 'One voice. One app.' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'mavenCentral()' settings.gradle
-grep -Fq 'jitpack.io' settings.gradle
+grep -Fq "implementation files('libs/sherpa-onnx-1.13.3.aar')" app/build.gradle
+grep -Fq 'sha256sum -c' .github/workflows/build-apk.yml
+grep -Fq 'sherpa-onnx-1.13.3.aar' .github/workflows/build-apk.yml
 
 # Live actions are restricted to exact call UI, role attribution and opt-in.
 if grep -Eq 'SharedPreferences\\.Editor.*caller|Log\\.[a-z]+\\(.*caller' "$service"; then
