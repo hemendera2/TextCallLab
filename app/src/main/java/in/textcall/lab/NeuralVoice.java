@@ -223,13 +223,10 @@ final class NeuralVoice {
                 int sid=speaker();
                 String text=message.trim();
                 String lang=HindiLanguage.likelyHindi(text)?"hi":"en";
-                GenerationConfig cfg=new GenerationConfig();
-                cfg.setSid(sid);
-                cfg.setSpeed(1.0f);
-                cfg.setNumSteps(5);
-                cfg.setExtra(Collections.singletonMap("lang",lang));
+                GenerationConfig cfg=new GenerationConfig(0.2f,1.0f,sid,
+                    null,0,null,5,Collections.singletonMap("lang",lang));
                 report("Generating "+("hi".equals(lang)?"Hindi":"English")+" voice…");
-                GeneratedAudio wave=tts.generateWithConfigAndCallback(text,cfg,samples->1);
+                GeneratedAudio wave=tts.generateWithConfig(text,cfg);
                 if(epoch!=speakEpoch.get())return;
                 float[] values=wave.getSamples();
                 if(values==null||values.length<1000)throw new Exception("Speech engine returned no audio");
@@ -248,18 +245,23 @@ final class NeuralVoice {
     }
     private void ensureEngine()throws Exception {
         if(tts!=null)return;
-        OfflineTtsSupertonicModelConfig cfg=OfflineTtsSupertonicModelConfig.builder()
-            .setDurationPredictor(asset("duration_predictor.int8.onnx").getAbsolutePath())
-            .setTextEncoder(asset("text_encoder.int8.onnx").getAbsolutePath())
-            .setVectorEstimator(asset("vector_estimator.int8.onnx").getAbsolutePath())
-            .setVocoder(asset("vocoder.int8.onnx").getAbsolutePath())
-            .setTtsJson(asset("tts.json").getAbsolutePath())
-            .setUnicodeIndexer(asset("unicode_indexer.bin").getAbsolutePath())
-            .setVoiceStyle(asset("voice.bin").getAbsolutePath()).build();
-        tts=new OfflineTts(OfflineTtsConfig.builder()
-            .setModel(OfflineTtsModelConfig.builder().setSupertonic(cfg)
-                .setNumThreads(2).setDebug(false).setProvider("cpu").build())
-            .setMaxNumSentences(1).build());
+        OfflineTtsSupertonicModelConfig cfg=new OfflineTtsSupertonicModelConfig(
+            asset("duration_predictor.int8.onnx").getAbsolutePath(),
+            asset("text_encoder.int8.onnx").getAbsolutePath(),
+            asset("vector_estimator.int8.onnx").getAbsolutePath(),
+            asset("vocoder.int8.onnx").getAbsolutePath(),
+            asset("tts.json").getAbsolutePath(),
+            asset("unicode_indexer.bin").getAbsolutePath(),
+            asset("voice.bin").getAbsolutePath());
+        OfflineTtsModelConfig model=new OfflineTtsModelConfig(
+            new com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig(),
+            new com.k2fsa.sherpa.onnx.OfflineTtsMatchaModelConfig(),
+            new com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig(),
+            new com.k2fsa.sherpa.onnx.OfflineTtsZipVoiceModelConfig(),
+            new com.k2fsa.sherpa.onnx.OfflineTtsKittenModelConfig(),
+            new com.k2fsa.sherpa.onnx.OfflineTtsPocketModelConfig(),
+            cfg,2,false,"cpu");
+        tts=new OfflineTts(null,new OfflineTtsConfig(model,"","",1,0.2f));
     }
     private void play(float[] values,int sampleRate,long epoch)throws Exception {
         int rate=sampleRate>0?sampleRate:44100;
