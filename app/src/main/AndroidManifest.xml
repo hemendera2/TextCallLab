@@ -3,6 +3,8 @@
     <!-- RECORD_AUDIO is optional and requested only when the user taps the in-app microphone.
          There is still no INTERNET, cellular audio access, contacts or messaging permission. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Only for the owner-requested one-time verified voice model download. No caller audio/text uploaded. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Discover only speech services installed on the device. -->
     <queries>
         <package android:name="com.CodeBySonu.VoxSherpa" />
