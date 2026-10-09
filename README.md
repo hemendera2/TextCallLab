@@ -1,3 +1,33 @@
+# KALLVO v1.0 — unified Hindi AI secretary prototype
+
+## Unified app, zero subscription
+KALLVO **no longer needs VoxSherpa or another TTS app** for in-app natural Hindi speech. Voice playback runs through embedded Android sherpa-onnx and Supertonic 3 INT8 in KALLVO's own process. A one-time **~125 MB verified voice-model download** within Voice settings is required; after setup, Hindi / English voice generation is local and does not use an AI API. Ten voice styles are available behind one compact male/female selector, not a lengthy external engine list.
+
+LLM: **one-tap download of Qwen3 0.6B Q4_K_M (~484 MB)** is now provided inside Talk or Settings > AI model & speed; the preexisting GGUF file-picker option remains. The downloaded model is verified with published SHA-256 before replacing the app-private model. It is not bundled in the APK. Inference may still be too slow on the Samsung A52s; device benchmark remains required. Clear safety/intents receive deterministic fast answers while open-ended turns use the GGUF.
+
+Design: simple three-tab Home / Talk / Settings, bottom tab symbols/labels centered in equal-height areas, light/dark theme, and model setup/call diagnostics grouped inside Settings. All remote downloads are **user-initiated** and visible, with no paid API or monthly fees. Downloading over mobile data may use the cellular plan.
+
+### Voice licensing and sourcing
+* Supertonic 3 model: **OpenRAIL-M** with restrictions and attribution; see https://github.com/supertone-inc/supertonic and https://github.com/chukfinley/supertonic-tts/releases/tag/model-v1 . Release asset SHA-256 pinned in NeuralVoice.java. Model redistribution/sale requires reviewing OpenRAIL-M restrictions. Model is downloaded from the source rather than bundled in the APK.
+* Embedded sherpa-onnx Android AAR: Apache-2.0, https://github.com/k2-fsa/sherpa-onnx, pinned v1.13.3, Kotlin stdlib dependency. KALLVO glue source is independently implemented.
+* Qwen3 0.6B Q4_K_M: Apache 2.0 foundation model, sourced from lmstudio-community model redistribution on Hugging Face and checked by SHA-256.
+
+### Actual privacy
+* INTERNET permission has been added for **explicit owner-triggered voice and GGUF downloads only**. Calls, voice audio and text prompts are not transmitted by either local inference path. No contacts/SMS/call-log permissions.
+* Voice/TTS output is KALLVO's own Android AudioTrack, not Samsung call-audio injection. Samsung Bixby Text Call remains separately responsible for *actual cellular-call speech*, and KALLVO's experimental Bixby accessibility bridge has **not been verified on the A52s**.
+* In-app voice input still relies on Android's **on-device Hindi recognizer** (and must have offline Hindi language pack installed). This is not yet a bundled standalone speech-to-text model.
+* Original GUI technician panel is available only through Settings > Engineering; experimental SIM automation must be explicitly enabled and first tested only with a consenting caller.
+* No assertion of market-ready reliability, audited security, perfect Hindi pronunciation or call latency is made. On-device acoustic tests and model warm/cold-load performance remain open.
+
+### Owner acceptance sequence
+1. Install newest **successful** GitHub Actions APK. No VoxSherpa needed. Open Settings > Hindi neural voice > Install voice pack once. Wait for SHA-256 verification.
+2. Choose Female or Male and a style number 1–5; tap Hear sample in Hindi. Audio must be audible directly from KALLVO and a failure must be reported if not.
+3. Open Talk: reuse an already imported GGUF or choose Install Hindi AI inside KALLVO. Press Load offline model, and test both a simple and complex Hindi phrase.
+4. Settings > AI model & speed: use benchmark. CPU timeouts should be shown rather than leaving users indefinitely on Thinking.
+5. Switch theme in Settings and check navigation. SIM call toggles remain OFF until controlled Samsung A52s test confirms transcript roles, Send button and caller's real voice playback.
+
+## Earlier development log
+
 # KALLVO v0.9.1 — CPU-latency emergency fix (Samsung A52s)
 
 **Observed issue:** user screenshot shows 30+ seconds with `Prefill 0/203 tokens` on Qwen3.5 0.8B, so v0.9 cannot be used as a realtime AI-call system.
