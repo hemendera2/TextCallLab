@@ -1,5 +1,14 @@
 # KALLVO v1.0.1 — actual setup and navigation repairs
 
+## 9 Oct 2026 — user device CPU evidence (not a SIM-call certification)
+- On the owner's Samsung handset the **saved GGUF loads, but actual 12-second CPU-bound benchmark times out**. This is a measured fail; loading the model does not certify latency.
+- Prompt prefill shortened without removing model identity, security or no-false-commitments rules. Context-specific follow-up recognition gives an instant answer to a date/time after an appointment request. Native errors and CPU timeouts yield a conservative spoken apology rather than silently stopping the voice loop.
+- This does NOT solve native SIM-audio access. Android reserves call audio capture to privileged system apps. Samsung Bixby Text Call is a different speech engine from downloaded KALLVO Supertonic.
+- **Realistic inbound-call option:** carrier call forwarding to a compliant Indian telephone DID (subject to carrier/provider terms) → Exotel inbound Voicebot/AgentStream bidirectional WSS → secure speech-to-text + fast conversational engine + the selected Supertonic voice synthesizer → caller. Official references: https://developer.exotel.com/docs/agentstream/what-to-use-when and https://developer.exotel.com/docs/agentstream/websocket-protocol . Owner must approve telephone account, costs and forwarding before activation; the WSS backend, voice engine on backend, uptime, ASR, identity and consent, compliance, failover and human escalation remain **unbuilt/unverified**. Do NOT enable or advertise this route as live.
+- Adding the Android TTS pack to the app is not the same as making that audio audible to an active SIM caller. No claim of working bidirectional call audio is authorized until a real handset+provider E2E acceptance test.
+
+
+
 ## CURRENT INSTALL SAFETY (9 October 2026)
 - Do **not** reinstall or uninstall KALLVO from an experimental Actions build. Without repository-managed persistent signing, the generated APK carries an ephemeral debug signature and cannot guarantee upgrade/data preservation.
 - New builds label their artifacts `KALLVO-UNSTABLE-debug-do-NOT-upgrade` when signing secrets are absent; only `KALLVO-stable-signed-APK` indicates consistent owner-provided signing (still requires a matching certificate for any already installed version).

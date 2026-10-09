@@ -17,6 +17,19 @@ public class TestFastReply {
         ok(FastReply.respond("कल मिलने का समय बताइए","Owner",Collections.emptyList()).contains("किस दिन"),"native Hindi meeting");
         ok(FastReply.respond("Mujhe kal milna hai","Owner",Collections.emptyList()).contains("किस दिन"),"Hinglish meeting");
         ok(FastReply.respond("price please","Owner",Collections.emptyList()).contains("verified"),"English pricing");
-        System.out.println("PASS: 11 Hindi/Hinglish/English instant caller intent safety checks");
+        ok(FastReply.respond("kal 5 baje","Owner",
+                Arrays.asList("Caller: appointment chahiye",
+                              "Assistant: किस दिन और कितने बजे मिलना चाहेंगे? अभी मैं बुकिंग कन्फर्म नहीं कर सकता।"))
+                .contains("कन्फर्म नहीं"),"context date continuation");
+        ok(FastReply.respond("tomorrow 5pm","Owner",
+                Arrays.asList("Caller: appointment",
+                              "Assistant: What day and time would you prefer? I cannot confirm an appointment yet."))
+                .contains("not confirmed"),"English date continuation");
+        ok(FastReply.respond("tomorrow 5pm","Owner",Collections.emptyList()).isEmpty(),
+                "Never invent a previous appointment topic");
+        ok(FastReply.timeoutFallback("Please help").contains("cannot answer"),"English timeout");
+        ok(FastReply.timeoutFallback("mujhe help karo").contains("सही जवाब"),"Hindi timeout");
+        ok(!FastReply.timeoutFallback("kal").contains("बुकिंग कन्फर्म"),"Never claim booked on timeout");
+        System.out.println("PASS: 17 Hindi/Hinglish/English instant caller intent and fallback safety checks");
     }
 }

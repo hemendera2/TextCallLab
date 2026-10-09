@@ -369,7 +369,8 @@ public final class SecretaryActivity extends Activity {
             LinearLayout model=horizontal();
             model.setBackground(shape(Color.rgb(231,247,239),14,0));
             model.setPadding(dp(13),dp(12),dp(13),dp(12));
-            model.addView(text("●  Model loaded · test reply speed",13,GREEN,true));
+            model.addView(text("●  GGUF in memory · "+LocalModel.modelSizeMiB(this)
+                    +" MiB · reply speed not guaranteed",13,GREEN,true));
             frame.addView(model);
             pad(frame,15);
         }
@@ -711,7 +712,7 @@ public final class SecretaryActivity extends Activity {
         options.addView(text(LocalModel.get().isLoaded() ? "Model is loaded"
                     : LocalModel.isImported(this) ? "Model imported" : "No GGUF imported",17,INK,true));
         pad(options,8);
-        caption(options,"AI downloads or imports once. The saved model reloads automatically when you reopen KALLVO. Only replace it if needed.");
+        caption(options,"Saved GGUF: "+LocalModel.modelSizeMiB(this)+" MiB. Loaded means ready in memory, not fast enough for real-time calls. No download is repeated on reopening.");
         pad(options,12);
         TextView aiProgress=text(LocalModel.get().status(),12,SOFT,false);
         options.addView(aiProgress);
@@ -997,11 +998,13 @@ public final class SecretaryActivity extends Activity {
                     if(current!=generationId||!foreground)return;
                     thinking=false;
                     if(reply.isEmpty()){
-                        listeningLoop=false;
-                        status("Offline AI too slow: "+error+
-                                ". Try smaller GGUF via Settings → AI model & speed.");
-                        prefs.edit().putString("model_benchmark_status","Timed out: "+error).apply();
+                        String fallback=FastReply.timeoutFallback(phrase);
+                        chat.recordExchange(phrase,fallback);
+                        status("Offline AI exceeded phone CPU budget ("+millis+"ms); speaking a safe fallback.");
+                        prefs.edit().putString("model_benchmark_status",
+                                "Offline AI timed out: "+error).apply();
                         show();
+                        speak(fallback);
                         return;
                     }
                     chat.recordExchange(phrase,reply);

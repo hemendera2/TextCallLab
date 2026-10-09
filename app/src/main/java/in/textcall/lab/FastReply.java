@@ -24,6 +24,17 @@ public final class FastReply {
                 ? "यह आपातकाल हो सकता है। कृपया तुरंत स्थानीय इमरजेंसी नंबर पर कॉल करें।"
                 : "This may be an emergency. Please contact local emergency services immediately.";
         }
+        // A short date/time continuation needs no repeated LLM prefill.
+        // Do not imply that an appointment is actually booked.
+        if (awaitingAppointmentTime(history) && hasDateOrTime(t)
+                && !any(t,"price","charges","fees","कीमत","कितना शुल्क")) {
+            return hindi
+                ? "समय नोट किया, लेकिन अपॉइंटमेंट अभी कन्फर्म नहीं है। मालिक की पुष्टि ज़रूरी है।"
+                : "I heard your preferred time, but the appointment is not confirmed. The owner must approve.";
+        }
+        if (any(t,"thank you","thanks","shukriya","dhanyavaad","धन्यवाद","शुक्रिया","bye","goodbye","अलविदा")) {
+            return hindi ? "धन्यवाद। नमस्ते।" : "Thank you. Goodbye.";
+        }
         if (any(t,"meeting","appointment","booking","milna","mulaqat","मुलाकात","मीटिंग","अपॉइंटमेंट","मिलना","मिलना है","समय बताइए")) {
             return hindi
                 ? "किस दिन और कितने बजे मिलना चाहेंगे? अभी मैं बुकिंग कन्फर्म नहीं कर सकता।"
@@ -54,6 +65,29 @@ public final class FastReply {
                 : (prior>0?"I'm listening. Please go ahead.":"Hello! I'm an automated AI secretary. How can I help?");
         }
         return "";
+    }
+    /** Conservative answer when LLM is too slow. Not a confirmation or task save. */
+    public static String timeoutFallback(String spoken) {
+        return HindiLanguage.likelyHindi(spoken)
+                ? "माफ़ कीजिए, अभी सही जवाब नहीं दे पा रहा। कृपया अपना सवाल थोड़ा संक्षेप में दोहराएँ।"
+                : "Sorry, I cannot answer reliably right now. Could you ask more briefly?";
+    }
+    private static boolean awaitingAppointmentTime(List<String> history) {
+        if (history == null) return false;
+        for (int i=history.size()-1; i>=0; i--) {
+            String turn=history.get(i);
+            if(turn==null || !turn.startsWith("Assistant:"))continue;
+            String lower=turn.toLowerCase(Locale.ROOT);
+            return any(lower,"किस दिन","कितने बजे","तारीख़ और समय",
+                    "what day and time","which date and time","day and time would");
+        }
+        return false;
+    }
+    private static boolean hasDateOrTime(String t) {
+        return any(t,"कल","आज","परसों","बजे","सुबह","शाम",
+                   "सोमवार","मंगलवार","बुधवार","गुरुवार","शुक्रवार","शनिवार","रविवार")
+                || t.matches(".*\\b(tomorrow|today|kal|parso|subah|shaam|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b.*")
+                || t.matches(".*\\b[0-9]{1,2}(:[0-9]{2})?\\s*(am|pm|baje|bje|o'clock)\\b.*");
     }
     private static boolean any(String t,String... choices) {
         for(String c:choices) if(t.contains(c)) return true;

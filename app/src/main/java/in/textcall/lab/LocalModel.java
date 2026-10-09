@@ -59,6 +59,10 @@ public final class LocalModel {
     public static File modelFile(Context context) {
         return new File(context.getApplicationContext().getFilesDir(), LOCAL_FILE);
     }
+    public static long modelSizeMiB(Context context) {
+        File file=modelFile(context);
+        return file.exists() ? file.length()/(1024L*1024L) : 0;
+    }
     public static boolean isImported(Context context) {
         File f = modelFile(context);
         return f.exists() && f.length() > 200_000_000L;
@@ -225,15 +229,22 @@ public final class LocalModel {
                 return;
             }
             long begin = SystemClock.elapsedRealtime();
-            String prompt = PromptFormatter.format(owner, facts, rules, history, caller);
-            String response = nativeGenerate(prompt, 32);
-            if (generationKey.get() != id) {
-                callback.done("", "Cancelled", SystemClock.elapsedRealtime() - begin);
-                return;
+            try {
+                String prompt = PromptFormatter.format(owner, facts, rules, history, caller);
+                String response = nativeGenerate(prompt, 32);
+                if (generationKey.get() != id) {
+                    callback.done("", "Cancelled", SystemClock.elapsedRealtime() - begin);
+                    return;
+                }
+                String cleaned = PromptFormatter.clean(response);
+                if (cleaned.isEmpty())
+                    callback.done("", "No usable reply. " + progress(),
+                            SystemClock.elapsedRealtime() - begin);
+                else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
+            } catch (Throwable e) {
+                callback.done("", "Offline model error: " + e.getClass().getSimpleName(),
+                        SystemClock.elapsedRealtime() - begin);
             }
-            String cleaned = PromptFormatter.clean(response);
-            if (cleaned.isEmpty()) callback.done("", "No usable reply. " + progress(), SystemClock.elapsedRealtime() - begin);
-            else callback.done(cleaned, "", SystemClock.elapsedRealtime() - begin);
         });
     }
     /** Summarizes caller phrases on-device, never uploads them. */
