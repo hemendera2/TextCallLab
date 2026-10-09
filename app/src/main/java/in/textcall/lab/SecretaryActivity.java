@@ -332,6 +332,7 @@ public final class SecretaryActivity extends Activity {
         pad(frame,7);
         caption(frame,"Hindi + Hinglish first. Voice understanding requires a local Hindi speech pack. No SIM call is placed.");
         pad(frame,16);
+        showActionInbox();
 
         if(!LocalModel.get().isLoaded()) {
             LinearLayout model=card();
@@ -443,8 +444,86 @@ public final class SecretaryActivity extends Activity {
             note.addView(text("LAST CALL FOLLOW-UP",11,BLUE,true));
             pad(note,8);
             note.addView(text(lastNote,13,INK,false));
+            String suggested="";
+            for(String line:lastNote.split("\\n")){
+                if(line.startsWith("Next action: ")) {
+                    suggested=line.substring("Next action: ".length()).trim();
+                    break;
+                }
+            }
+            if(!suggested.isEmpty() && !"None".equalsIgnoreCase(suggested)){
+                String task=suggested;
+                pad(note,11);
+                note.addView(press("Confirm and add as follow-up",false,()->{
+                    try{
+                        new SecretaryTaskStore(this).add(task,false);
+                        toast("Follow-up saved");
+                        show();
+                    }catch(Exception error){toast("Task not added: "+error.getMessage());}
+                }));
+            }
             gapCard(frame,note);
         }
+    }
+
+    /** Owner-controlled follow-ups. Nothing is auto-committed from an AI call. */
+    private void showActionInbox() {
+        LinearLayout box=card();
+        box.addView(text("YOUR FOLLOW-UPS",11,BLUE,true));
+        pad(box,7);
+        SecretaryTaskStore store=new SecretaryTaskStore(this);
+        try {
+            List<SecretaryTaskStore.Task> items=store.list();
+            int important=0;
+            for(SecretaryTaskStore.Task item:items)if(item.important)important++;
+            box.addView(text(items.isEmpty()?"No outstanding tasks"
+                    : items.size()+" to do"+(important>0?" · "+important+" important":""),
+                    17,INK,true));
+            pad(box,8);
+            if(items.isEmpty()) {
+                caption(box,"Add a task or confirm a follow-up from a call note. It stays private on this device.");
+            }
+            for(SecretaryTaskStore.Task item:items) {
+                LinearLayout row=horizontal();
+                LinearLayout label=vertical();
+                label.addView(text((item.important?"IMPORTANT · ":"")+item.title,
+                        13,item.important?INK:SOFT,item.important));
+                row.addView(label,new LinearLayout.LayoutParams(0,-2,1f));
+                TextView done=pill("✓ Done",false);
+                done.setClickable(true);
+                done.setOnClickListener(v->{
+                    try {
+                        store.finish(item.id);
+                        show();
+                    }catch(Exception error){toast("Task could not be saved");}
+                });
+                row.addView(done);
+                row.setPadding(0,dp(8),0,dp(8));
+                box.addView(row);
+            }
+            pad(box,10);
+            EditText newTask=edit("Add a follow-up or reminder…","",1);
+            box.addView(newTask);
+            pad(box,8);
+            Switch important=new Switch(this);
+            important.setText("Important");
+            important.setTextSize(13);
+            important.setTextColor(INK);
+            box.addView(important);
+            pad(box,8);
+            box.addView(press("Save follow-up",true,()->{
+                String label=newTask.getText().toString().trim();
+                if(label.isEmpty()){toast("Enter a task first");return;}
+                try {
+                    store.add(label,important.isChecked());
+                    show();
+                }catch(Exception error){toast(error.getMessage()==null
+                        ? "Could not save encrypted task":error.getMessage());}
+            }));
+        }catch(Exception error){
+            caption(box,"Encrypted follow-ups could not be opened. Existing data was not overwritten.");
+        }
+        gapCard(frame,box);
     }
 
     private void showSettings() {

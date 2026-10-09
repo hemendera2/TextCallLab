@@ -23,6 +23,9 @@ grep -Fq 'Prefs.AUTO_ATTEND, false' "$service"
 grep -Fq 's.editables != 1 || s.sendButtons != 1' "$service"
 grep -Fq 'MAX_REPLIES = 12' "$service"
 grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/PrivateBriefStore.java
+grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/SecretaryTaskStore.java
+grep -Fq 'AES/GCM/NoPadding' app/src/main/java/in/textcall/lab/SecretaryTaskStore.java
+grep -Fq 'showActionInbox();' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'AES/GCM/NoPadding' app/src/main/java/in/textcall/lab/PrivateBriefStore.java
 grep -Fq 'System.loadLibrary("callcompanion_llm")' app/src/main/java/in/textcall/lab/LocalModel.java
 grep -Fq 'getContentResolver().openInputStream' app/src/main/java/in/textcall/lab/LocalModel.java
