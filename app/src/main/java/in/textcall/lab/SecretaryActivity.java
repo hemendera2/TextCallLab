@@ -78,7 +78,12 @@ public final class SecretaryActivity extends Activity {
     private int currentScreen=0;
 
     @Override public void onCreate(Bundle state) {
+        SharedPreferences appearance=Prefs.get(this);
+        setTheme(appearance.getBoolean("kallvo_dark",false)
+                ? android.R.style.Theme_Material_NoActionBar
+                : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(state);
+        tab=getIntent().getIntExtra("restore_tab",0);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(WHITE);
         getWindow().getDecorView().setSystemUiVisibility(
@@ -498,7 +503,8 @@ public final class SecretaryActivity extends Activity {
         theme.setChecked(dark);
         theme.setOnCheckedChangeListener((v,on)->{
             prefs.edit().putBoolean("kallvo_dark",on).apply();
-            show();
+            getIntent().putExtra("restore_tab",2);
+            recreate();
         });
         LinearLayout appearance=card();
         appearance.addView(theme);
