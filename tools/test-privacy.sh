@@ -8,7 +8,7 @@ main="app/src/main/java/in/textcall/lab/MainActivity.java"
 access="app/src/main/res/xml/accessibility_service_config.xml"
 
 # Static guardrails only; live Samsung call integration requires real device validation.
-for permission in INTERNET READ_SMS READ_CONTACTS READ_CALL_LOG READ_PHONE_STATE SYSTEM_ALERT_WINDOW CAPTURE_AUDIO_OUTPUT; do
+for permission in READ_SMS READ_CONTACTS READ_CALL_LOG READ_PHONE_STATE SYSTEM_ALERT_WINDOW CAPTURE_AUDIO_OUTPUT; do
   if grep -Fq "<uses-permission android:name=\"android.permission.${permission}\"" "$manifest"; then
     echo "FAIL: Unauthorized sensitive permission $permission"
     exit 1
@@ -68,11 +68,13 @@ grep -Fq 'String gender = gender(voice);' "$voices"
 grep -Fq 'KEY_FEATURE_NOT_INSTALLED' "$voices"
 grep -Fq 'isNetworkConnectionRequired()' "$voices"
 grep -Fq 'new TextToSpeech(context, listener, requested)' "$voices"
-grep -Fq 'prefs.edit().putString(Prefs.TTS_ENGINE' app/src/main/java/in/textcall/lab/SecretaryActivity.java
-grep -Fq 'VOICE CHARACTER' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'new NeuralVoice(this)' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'neural.speak' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'Choose speaker style' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'Install voice pack' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'voice.setStatusListener' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'voiceHealthView=text' app/src/main/java/in/textcall/lab/SecretaryActivity.java
-grep -Fq 'Check offline Hindi understanding' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'Check Hindi speech recognition' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'checkRecognitionSupport' app/src/main/java/in/textcall/lab/LocalSpeechInput.java
 grep -Fq 'getInstalledOnDeviceLanguages' app/src/main/java/in/textcall/lab/LocalSpeechInput.java
 grep -Fq 'onBeginSynthesis' "$voices"
@@ -81,8 +83,16 @@ grep -Fq 'TTS synthesis/playback FAILED' "$voices"
 grep -Fq 'tts.getDefaultEngine()' "$voices"
 grep -Fq 'HindiLanguage.replyStyle' app/src/main/java/in/textcall/lab/PromptFormatter.java
 grep -Fq 'HindiLanguage.likelyHindi' app/src/main/java/in/textcall/lab/FastReply.java
-grep -Fq 'Supertonic external-app compatibility is unverified' app/src/main/java/in/textcall/lab/SecretaryActivity.java
-grep -Fq 'genderFilter' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'kallvo_dark' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'android.permission.INTERNET' "$manifest"
+grep -Fq 'SHA256 =' app/src/main/java/in/textcall/lab/NeuralVoice.java
+grep -Fq 'validArchive(zip)' app/src/main/java/in/textcall/lab/NeuralVoice.java
+grep -Fq 'OfflineTtsSupertonicModelConfig' app/src/main/java/in/textcall/lab/NeuralVoice.java
+grep -Fq 'tts.generateWithConfigAndCallback' app/src/main/java/in/textcall/lab/NeuralVoice.java
+grep -Fq 'AudioTrack' app/src/main/java/in/textcall/lab/NeuralVoice.java
+grep -Fq 'One voice. One app.' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'mavenCentral()' settings.gradle
+grep -Fq 'jitpack.io' settings.gradle
 
 # Live actions are restricted to exact call UI, role attribution and opt-in.
 if grep -Eq 'SharedPreferences\\.Editor.*caller|Log\\.[a-z]+\\(.*caller' "$service"; then
@@ -94,4 +104,4 @@ if grep -Eq 'HttpURLConnection|java\.net\.|okhttp|Retrofit|https?://' "$main" "$
   exit 1
 fi
 
-echo 'PASS: no internet; foreground mic consent; on-device-only STT; no caller transcript persistence; role-gated opt-in Samsung actions; encrypted briefs; offline TTS'
+echo 'PASS: restricted download URL and pinned SHA256; no call network path; foreground mic consent; on-device recognition; gated Bixby actions; encrypted briefs; in-app neural TTS'
