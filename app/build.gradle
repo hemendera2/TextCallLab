@@ -35,6 +35,6 @@ android {
 
 // Embedded Supertonic 3 runtime; no system TTS app needed.
 dependencies {
-    implementation 'com.github.k2-fsa:sherpa-onnx:v1.13.3'
+    implementation files('libs/sherpa-onnx-1.13.3.aar')
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.0.21'
 }
