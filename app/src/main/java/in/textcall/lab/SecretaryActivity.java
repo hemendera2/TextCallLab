@@ -373,7 +373,12 @@ public final class SecretaryActivity extends Activity {
                     : "Choose the Qwen GGUF already saved in Downloads.");
             pad(model,12);
             if(!LocalModel.isImported(this)) {
-                model.addView(press("Choose GGUF file",false,this::chooseGGUF));
+                TextView aiProgress=text("Choose a downloaded GGUF, or install the recommended model in-app.",12,SOFT,false);
+                model.addView(aiProgress);
+                pad(model,8);
+                model.addView(press("Install Hindi AI · ~484 MB",true,()->offerAIDownload(aiProgress)));
+                pad(model,8);
+                model.addView(press("Use existing GGUF from Downloads",false,this::chooseGGUF));
                 pad(model,8);
             }
             model.addView(press("Load offline model",true,()->{
@@ -606,15 +611,44 @@ public final class SecretaryActivity extends Activity {
         return "hi".equals(locale.getLanguage())?"नमस्ते, आपका स्वागत है।":"Hello and welcome.";
     }
 
+    private void offerAIDownload(TextView target) {
+        new AlertDialog.Builder(this).setTitle("Install Hindi AI inside KALLVO?")
+            .setMessage("One-time download ~484 MB from Hugging Face. File is verified with SHA-256, then runs offline. Mobile data may be charged by your carrier. Qwen3 0.6B is smaller, not guaranteed faster or more accurate than the installed model.")
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Install",(d,w)->{
+                if(target!=null)target.setText("Downloading AI…");
+                LocalModel.get().downloadRecommended(this,(ok,msg)->runOnUiThread(()->{
+                    callState=msg;
+                    if(target!=null)target.setText(msg);
+                    toast(msg);
+                    if(ok && foreground)show();
+                }));
+                final Runnable[] refresh=new Runnable[1];
+                refresh[0]=()->{
+                    if(LocalModel.get().isDownloading()&&foreground){
+                        if(target!=null)target.setText(LocalModel.get().status());
+                        ui.postDelayed(refresh[0],1000);
+                    }
+                };
+                ui.postDelayed(refresh[0],1000);
+            }).show();
+    }
+
     private void showModels() {
         backTitle("OFFLINE AI","Fast model controls.");
         LinearLayout options=card();
         options.addView(text(LocalModel.get().isLoaded() ? "Model is loaded"
                     : LocalModel.isImported(this) ? "Model imported" : "No GGUF imported",17,INK,true));
         pad(options,8);
-        caption(options,"Your current Qwen3.5 0.8B is very slow on A52s. Try a smaller Qwen3 0.6B GGUF, then run the benchmark. Model is never downloaded by the app.");
+        caption(options,"KALLVO can download the recommended Qwen3 0.6B or import any compatible existing GGUF. Test response speed before relying on it.");
         pad(options,12);
-        options.addView(press("Replace model from Downloads",true,()->new AlertDialog.Builder(this)
+        TextView aiProgress=text(LocalModel.get().status(),12,SOFT,false);
+        options.addView(aiProgress);
+        pad(options,10);
+        options.addView(press("Install recommended Hindi AI · ~484 MB",true,
+                ()->offerAIDownload(aiProgress)));
+        pad(options,9);
+        options.addView(press("Choose existing GGUF file",false,()->new AlertDialog.Builder(this)
             .setTitle("Replace local AI model?")
             .setMessage("The current model will be unloaded. Your original downloaded GGUF file stays untouched.")
             .setNegativeButton("Cancel",null)
