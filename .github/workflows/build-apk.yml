@@ -21,8 +21,21 @@ jobs:
         with:
           packages: 'platform-tools'
           log-accepted-android-sdk-licenses: 'false'
-      - name: Install Android SDK, NDK and CMake
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Install Android SDK, NDK and CMake (resilient)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'; then
+              echo "Android toolchain ready"
+              exit 0
+            fi
+            echo "SDK download transient error; retry $attempt / 3"
+            rm -rf "${ANDROID_HOME}/ndk/27.2.12479018"
+            sleep 4
+          done
+          echo "Android SDK/NDK installation failed after retries" >&2
+          exit 1
       - name: Fetch pinned llama.cpp sources
         run: |
           set -euo pipefail
