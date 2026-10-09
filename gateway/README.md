@@ -39,3 +39,8 @@ Mock protocol/audio tests do not need real ASR, TTS, Ollama or Exotel credential
 A successful CI build only checks source-level protocol simulation, not live phone calls. Energy-based VAD is heuristic and will need real caller testing/tuning; ambient noise may affect segmentation. Provider rate, uptime, compliance and fallback can create charges. Never ask the owner to paste API credentials into chat.
 
 Official technical docs: https://developer.exotel.com/docs/agentstream/websocket-protocol and https://support.exotel.com/support/solutions/articles/3000108630-working-with-the-stream-and-voicebot-applet
+
+## October 9 protocol hardening
+- Outbound `media` uses Exotel's documented `event`, `stream_sid`, and `media.payload` fields only. Incoming `chunk` and `timestamp` are not sent back to the provider.
+- Reject missing HTTP Basic Authorization headers instead of leaking a 500; require actual random credentials and never accept placeholder secrets.
+- Exotel start media format must be PCM16 mono and 8/16/24 kHz. Malformed media is rejected before ASR. CI exercises both the WebSocket authentication and HTTP voice-control endpoint with fake engines. No live caller audio used.

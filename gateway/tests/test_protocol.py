@@ -40,13 +40,17 @@ class Protocol(unittest.TestCase):
             decode_media({"event":"media","media":{"payload":"invalid!"}})
         with self.assertRaises(ValueError):
             check_rate(44100)
+        with self.assertRaises(ValueError):
+            decode_media({"event":"media","media":[]})
+        with self.assertRaises(ValueError):
+            decode_media({"event":"media","media":{"payload":"AAA="}})
     def test_outbound_alignment(self):
         chunks=list(frames(b"\0"*32000,16000))
         self.assertEqual(len(chunks),10)
         for payload,seconds in chunks:
             self.assertEqual(len(base64.b64decode(payload)),3200)
             self.assertAlmostEqual(seconds,0.1)
-        self.assertEqual(media("MZ1","abc",1,0)["stream_sid"],"MZ1")
+        self.assertEqual(media("MZ1","abc",1,0),{"event":"media","stream_sid":"MZ1","media":{"payload":"abc"}})
 
 class Session(unittest.IsolatedAsyncioTestCase):
     async def test_call_turn_and_cleanup(self):
@@ -68,6 +72,18 @@ class Session(unittest.IsolatedAsyncioTestCase):
         await session.close()
         self.assertTrue(session.closed)
         self.assertFalse(session.history)
+    async def test_reject_unsupported_audio_negotiation(self):
+        session=CallSession(Socket(),Engine())
+        await session.handle({"event":"start","stream_sid":"MZBAD",
+                              "start":{"media_format":{"encoding":"audio/opus",
+                                     "bit_rate":"16","sample_rate":"8000"}}})
+        self.assertFalse(session.active)
+        await session.handle({"event":"start","stream_sid":"MZOK",
+                              "start":{"media_format":{"encoding":"audio/x-raw",
+                                     "bit_rate":"16","sample_rate":"16000"}}})
+        self.assertTrue(session.active)
+        self.assertEqual(session.rate,16000)
+        await session.close()
     async def test_single_barge_in_clear(self):
         sock=Socket()
         session=CallSession(sock,Engine())

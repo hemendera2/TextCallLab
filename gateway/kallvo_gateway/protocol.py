@@ -1,8 +1,6 @@
 """Exotel bidirectional JSON and PCM16 little-endian transport."""
 import base64
 import math
-import struct
-
 RATES = (8000, 16000, 24000)
 
 def check_rate(value):
@@ -17,7 +15,10 @@ def check_rate(value):
 def decode_media(event):
     if event.get("event")!="media":
         raise ValueError("Not a media event")
-    payload=event.get("media",{}).get("payload")
+    media_object=event.get("media")
+    if not isinstance(media_object,dict):
+        raise ValueError("Invalid media object")
+    payload=media_object.get("payload")
     if not isinstance(payload,str) or not payload or len(payload)>150000:
         raise ValueError("Missing or oversize media payload")
     try:
@@ -46,11 +47,15 @@ def frames(pcm,rate):
             part+=b"\0"*(chunk-len(part))
         yield base64.b64encode(part).decode("ascii"),len(part)/(2*rate)
 
-def media(sid,b64,chunk,timestamp):
-    if not sid:
-        raise ValueError("Missing stream id")
-    return {"event":"media","stream_sid":sid,"media":{
-        "chunk":chunk,"timestamp":str(timestamp),"payload":b64}}
+def media(sid,b64,chunk=None,timestamp=None):
+    """Exotel outbound payload only. Chunk/timestamp are INBOUND metadata.
+
+    They are intentionally not echoed or invented: the Voicebot protocol
+    specifies only media.payload for server-to-caller frames.
+    """
+    if not sid or not isinstance(b64,str):
+        raise ValueError("Missing stream id or media payload")
+    return {"event":"media","stream_sid":sid,"media":{"payload":b64}}
 
 def clear(sid):
     return {"event":"clear","stream_sid":sid}

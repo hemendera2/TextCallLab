@@ -39,8 +39,15 @@ class CallSession:
             sid=event["stream_sid"]
             if not sid or len(sid)>128:
                 return
-            start=event.get("start",{})
-            self.rate=check_rate(start.get("media_format",{}).get("sample_rate",self.rate))
+            start=event.get("start")
+            if not isinstance(start,dict):
+                return
+            media_format=start.get("media_format",{})
+            if not isinstance(media_format,dict):
+                return
+            if media_format.get("encoding","audio/x-raw")!="audio/x-raw" or str(media_format.get("bit_rate",16))!="16":
+                return
+            self.rate=check_rate(media_format.get("sample_rate",self.rate))
             self.sid=sid
             self.speaker=self.engine.speaker_id
             self.active=True

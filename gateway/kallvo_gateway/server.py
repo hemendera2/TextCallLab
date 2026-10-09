@@ -31,12 +31,14 @@ def check_basic(authorization):
         username,password=decoded.split(":",1)
         return (hmac.compare_digest(username,_secret("KALLVO_STREAM_BASIC_USER",16))
                 and hmac.compare_digest(password,_secret("KALLVO_STREAM_BASIC_PASSWORD",24)))
-    except (ValueError,UnicodeDecodeError,RuntimeError):
+    except (AttributeError,TypeError,ValueError,UnicodeDecodeError,RuntimeError):
         return False
 
 def check_admin(authorization):
     secret=os.getenv("KALLVO_ADMIN_TOKEN","")
-    return len(secret)>=24 and hmac.compare_digest(authorization,"Bearer "+secret)
+    return (isinstance(authorization,str) and len(secret)>=24
+            and "REPLACE" not in secret.upper()
+            and hmac.compare_digest(authorization,"Bearer "+secret))
 
 @app.get("/health")
 async def health():
@@ -46,7 +48,10 @@ async def health():
 async def select_voice(request:Request):
     if not check_admin(request.headers.get("authorization","")):
         raise HTTPException(401,"Not authorized")
-    payload=await request.json()
+    try:
+        payload=await request.json()
+    except (ValueError,UnicodeDecodeError):
+        raise HTTPException(422,"Expected a JSON object") from None
     if not isinstance(payload,dict) or set(payload)!={"speaker_id"} or type(payload["speaker_id"]) is not int or payload["speaker_id"] not in range(10):
         raise HTTPException(422,"speaker_id must be integer 0..9")
     if _engine is None:
