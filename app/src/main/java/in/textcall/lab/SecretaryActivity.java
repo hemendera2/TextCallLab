@@ -505,17 +505,17 @@ public final class SecretaryActivity extends Activity {
             EditText newTask=edit("Add a follow-up or reminder…","",1);
             box.addView(newTask);
             pad(box,8);
-            Switch important=new Switch(this);
-            important.setText("Important");
-            important.setTextSize(13);
-            important.setTextColor(INK);
-            box.addView(important);
+            Switch importantToggle=new Switch(this);
+            importantToggle.setText("Important");
+            importantToggle.setTextSize(13);
+            importantToggle.setTextColor(INK);
+            box.addView(importantToggle);
             pad(box,8);
             box.addView(press("Save follow-up",true,()->{
                 String label=newTask.getText().toString().trim();
                 if(label.isEmpty()){toast("Enter a task first");return;}
                 try {
-                    store.add(label,important.isChecked());
+                    store.add(label,importantToggle.isChecked());
                     show();
                 }catch(Exception error){toast(error.getMessage()==null
                         ? "Could not save encrypted task":error.getMessage());}
