@@ -34,21 +34,34 @@ import java.util.Locale;
  * the older MainActivity; no live-call success is implied by local AI readiness.
  */
 public final class SecretaryActivity extends Activity {
-    private static final int BG = Color.rgb(247,248,252);
-    private static final int INK = Color.rgb(24,32,49);
-    private static final int SOFT = Color.rgb(105,116,136);
-    private static final int LINE = Color.rgb(230,233,240);
-    private static final int BLUE = Color.rgb(60,91,219);
-    private static final int PALE = Color.rgb(238,242,254);
-    private static final int GREEN = Color.rgb(21,128,100);
-    private static final int WHITE = Color.WHITE;
+    private int BG = Color.rgb(247,248,252);
+    private int INK = Color.rgb(24,32,49);
+    private int SOFT = Color.rgb(105,116,136);
+    private int LINE = Color.rgb(230,233,240);
+    private int BLUE = Color.rgb(60,91,219);
+    private int PALE = Color.rgb(238,242,254);
+    private int GREEN = Color.rgb(21,128,100);
+    private int WHITE = Color.WHITE;
+    private boolean dark;
+    private void applyTheme() {
+        dark=prefs!=null && prefs.getBoolean("kallvo_dark",false);
+        BG=dark?Color.rgb(14,19,30):Color.rgb(247,248,252);
+        INK=dark?Color.rgb(237,242,252):Color.rgb(24,32,49);
+        SOFT=dark?Color.rgb(162,173,193):Color.rgb(105,116,136);
+        LINE=dark?Color.rgb(51,61,81):Color.rgb(230,233,240);
+        BLUE=dark?Color.rgb(124,153,255):Color.rgb(60,91,219);
+        PALE=dark?Color.rgb(37,49,78):Color.rgb(238,242,254);
+        GREEN=dark?Color.rgb(99,217,171):Color.rgb(21,128,100);
+        WHITE=dark?Color.rgb(26,34,49):Color.WHITE;
+    }
     private static final int MIC_REQUEST = 6401;
     private static final int FILE_REQUEST = 6402;
     private static final String TTS_APP = "com.CodeBySonu.VoxSherpa";
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
-    private LocalVoiceEngine voice;
+    private LocalVoiceEngine voice; // legacy technician engine only
+    private NeuralVoice neural;
     private LocalSpeechInput speech;
     private ConversationEngine chat;
     private int tab=0;
@@ -72,6 +85,12 @@ public final class SecretaryActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         prefs=Prefs.get(this);
+        applyTheme();
+        neural=new NeuralVoice(this);
+        neural.listen(status -> runOnUiThread(() -> {
+            if (voiceHealthView!=null && "voice".equals(detail)) voiceHealthView.setText(status);
+            if (progressView!=null && tab==1 && !thinking)progressView.setText(status);
+        }));
         speech=new LocalSpeechInput(this);
         voice=new LocalVoiceEngine(this,prefs);
         voice.setStatusListener(message -> {
@@ -96,6 +115,7 @@ public final class SecretaryActivity extends Activity {
     @Override protected void onDestroy() {
         stopTurn();
         voice.shutdown();
+        neural.shutdown();
         super.onDestroy();
     }
     private void resetChat() {
@@ -207,12 +227,17 @@ public final class SecretaryActivity extends Activity {
         into.addView(row);
     }
     private void show() {
+        applyTheme();
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
+        getWindow().getDecorView().setSystemUiVisibility(dark ? 0 :
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         LinearLayout root=vertical();
         root.setBackgroundColor(BG);
 
         LinearLayout header=horizontal();
         header.setPadding(dp(23),dp(16),dp(23),dp(13));
-        TextView mark=text("✦",22,WHITE,true);
+        TextView mark=text("✦",22,Color.WHITE,true);
         mark.setGravity(Gravity.CENTER);
         mark.setBackground(shape(BLUE,12,0));
         header.addView(mark,new LinearLayout.LayoutParams(dp(39),dp(39)));
@@ -221,7 +246,7 @@ public final class SecretaryActivity extends Activity {
         labels.addView(text("KALLVO",18,INK,true));
         labels.addView(text("AI SECRETARY",10,SOFT,true));
         header.addView(labels,new LinearLayout.LayoutParams(0,-2,1f));
-        TextView tag=pill("PRIVATE • LOCAL",true);
+        TextView tag=pill("ON-DEVICE",true);
         header.addView(tag);
         root.addView(header);
 
@@ -237,25 +262,26 @@ public final class SecretaryActivity extends Activity {
         bottom.setBackgroundColor(WHITE);
         bottom.setPadding(dp(13),dp(8),dp(13),dp(11));
         final String[] names={"Home","Talk","Settings"};
-        final String[] symbols={"⌂","◎","⚙"};
-        for(int i=0;i<3;i++) {
+        final String[] symbols={"⌂","◉","⚙"};
+        for(int i=0;i<names.length;i++) {
             final int selected=i;
             LinearLayout item=vertical();
             item.setGravity(Gravity.CENTER);
-            item.setPadding(dp(4),dp(7),dp(4),dp(7));
+            item.setPadding(dp(5),dp(7),dp(5),dp(7));
             item.setBackground(shape(tab==i?PALE:WHITE,13,0));
-            item.addView(text(symbols[i],21,tab==i?BLUE:SOFT,true));
-            TextView title=text(names[i],11,tab==i?BLUE:SOFT,tab==i);
+            TextView ico=text(symbols[i],21,tab==i?BLUE:SOFT,true);
+            ico.setGravity(Gravity.CENTER);
+            item.addView(ico,new LinearLayout.LayoutParams(-1,dp(28)));
+            TextView title=text(names[i],12,tab==i?BLUE:SOFT,tab==i);
             title.setGravity(Gravity.CENTER);
-            item.addView(title);
+            item.addView(title,new LinearLayout.LayoutParams(-1,dp(24)));
             item.setOnClickListener(v->{
                 stopTurn();
                 tab=selected;
                 detail="";
-                genderFilter="";
                 show();
             });
-            bottom.addView(item,new LinearLayout.LayoutParams(0,-2,1f));
+            bottom.addView(item,new LinearLayout.LayoutParams(0,dp(64),1f));
         }
         root.addView(bottom);
         setContentView(root);
@@ -298,8 +324,15 @@ public final class SecretaryActivity extends Activity {
                 ? "●  Offline AI loaded" : "○  Offline AI not loaded",
                 15,LocalModel.get().isLoaded()?GREEN:INK,true));
         pad(status,8);
-        status.addView(text(voice.ready() ? "●  Voice engine connected" : "○  Voice engine unavailable",
-                14,voice.ready()?GREEN:SOFT,false));
+        status.addView(text(neural.isInstalled()
+                ? "●  Built-in Hindi neural voice installed" : "○  Hindi neural voice needs one-time setup",
+                14,neural.isInstalled()?GREEN:SOFT,false));
+        if(!neural.isInstalled()){
+            pad(status,12);
+            status.addView(press("Install Hindi voice inside KALLVO   →",true,()->{
+                tab=2;detail="voice";show();
+            }));
+        }
         pad(status,12);
         status.addView(text("SIM call integration · Not verified on this phone",
                 12,SOFT,false));
@@ -314,7 +347,8 @@ public final class SecretaryActivity extends Activity {
         gapCard(frame,brief);
 
         LinearLayout row=card();
-        navRow(row,"Set your voice",voice.chosenVoiceLabel(),"›",()->{
+        navRow(row,"Choose Hindi voice",neural.isInstalled()
+                ? NeuralVoice.speakerLabel(neural.speaker())+" · built-in" : "Install one-time voice pack","›",()->{
             tab=2;detail="voice";show();
         });
         navRow(row,"Give your secretary context","Owner details and conversation rules","›",()->{
@@ -434,7 +468,9 @@ public final class SecretaryActivity extends Activity {
         navRow(preferences,"AI model & speed",LocalModel.get().isLoaded()
                 ? "Loaded: speed needs testing" : "Load or change your GGUF",
                 "›",()->{detail="models";show();});
-        navRow(preferences,"Voice studio",voice.chosenVoiceLabel(),"›",()->{detail="voice";show();});
+        navRow(preferences,"Hindi neural voice",neural.isInstalled()
+                ? NeuralVoice.speakerLabel(neural.speaker())+" · installed" : "Set up in KALLVO",
+                "›",()->{detail="voice";show();});
         navRow(preferences,"Your secretary","Name, public facts and instructions","›",()->{
             detail="profile";show();
         });
@@ -458,7 +494,20 @@ public final class SecretaryActivity extends Activity {
             startActivity(new Intent(this,MainActivity.class));
         }));
         gapCard(frame,support);
-        caption(frame,"KALLVO is a working prototype, not yet a certified automated SIM-call agent.");
+        Switch theme=new Switch(this);
+        theme.setText("Dark mode");
+        theme.setTextColor(INK);
+        theme.setTextSize(15);
+        theme.setPadding(dp(12),dp(12),dp(12),dp(12));
+        theme.setChecked(dark);
+        theme.setOnCheckedChangeListener((v,on)->{
+            prefs.edit().putBoolean("kallvo_dark",on).apply();
+            show();
+        });
+        LinearLayout appearance=card();
+        appearance.addView(theme);
+        gapCard(frame,appearance);
+        caption(frame,"On-device AI is experimental. Cellular call automation is not yet certified.");
     }
     private void backTitle(String eyebrow,String title) {
         TextView back=text("‹  Settings",13,BLUE,true);
@@ -943,6 +992,7 @@ public final class SecretaryActivity extends Activity {
         listeningLoop=false;
         if(speech!=null)speech.stop();
         if(voice!=null)voice.stop();
+        if(neural!=null)neural.stop();
     }
     private void speechSettings() {
         try{startActivity(new Intent("com.android.settings.TTS_SETTINGS"));}
