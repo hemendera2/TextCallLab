@@ -9,7 +9,7 @@ Design: simple three-tab Home / Talk / Settings, bottom tab symbols/labels cente
 
 ### Voice licensing and sourcing
 * Supertonic 3 model: **OpenRAIL-M** with restrictions and attribution; see https://github.com/supertone-inc/supertonic and https://github.com/chukfinley/supertonic-tts/releases/tag/model-v1 . Release asset SHA-256 pinned in NeuralVoice.java. Model redistribution/sale requires reviewing OpenRAIL-M restrictions. Model is downloaded from the source rather than bundled in the APK.
-* Embedded sherpa-onnx Android AAR: Apache-2.0, https://github.com/k2-fsa/sherpa-onnx, pinned v1.13.3, Kotlin stdlib dependency. KALLVO glue source is independently implemented.
+* Embedded sherpa-onnx Android AAR: Apache-2.0, https://github.com/k2-fsa/sherpa-onnx, official pinned v1.13.3 release 57MB; CI downloads the AAR and verifies SHA-256 243ad797a3b6e75ebbeaf7a2ab4aec0777e7d71b730685abb762a120940b07b6. Kotlin stdlib bundled by Gradle. KALLVO glue source is independently implemented.
 * Qwen3 0.6B Q4_K_M: Apache 2.0 foundation model, sourced from lmstudio-community model redistribution on Hugging Face and checked by SHA-256.
 
 ### Actual privacy
