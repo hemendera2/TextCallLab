@@ -60,8 +60,7 @@ public final class SecretaryActivity extends Activity {
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
-    private LocalVoiceEngine voice; // legacy technician engine only
-    private NeuralVoice neural;
+     private NeuralVoice neural;
     private LocalSpeechInput speech;
     private ConversationEngine chat;
     private int tab=0;
@@ -92,15 +91,8 @@ public final class SecretaryActivity extends Activity {
             if (progressView!=null && tab==1 && !thinking)progressView.setText(status);
         }));
         speech=new LocalSpeechInput(this);
-        voice=new LocalVoiceEngine(this,prefs);
-        voice.setStatusListener(message -> {
-            if (voiceHealthView != null && "voice".equals(detail)) voiceHealthView.setText(message);
-        });
-        resetChat();
-        voice.start(ok -> runOnUiThread(() -> {
-            if (!isFinishing()) show();
-        }));
-        show();
+         resetChat();
+         show();
     }
     @Override protected void onResume() {
         super.onResume();
@@ -114,8 +106,7 @@ public final class SecretaryActivity extends Activity {
     }
     @Override protected void onDestroy() {
         stopTurn();
-        voice.shutdown();
-        neural.shutdown();
+         neural.shutdown();
         super.onDestroy();
     }
     private void resetChat() {
@@ -782,7 +773,7 @@ public final class SecretaryActivity extends Activity {
         LinearLayout notes=card();
         notes.addView(text("Local inference",16,INK,true));
         pad(notes,6);
-        caption(notes,"This app has no Internet, contacts, SMS, or call-log permission. Your speech engine and Samsung Bixby may have separate privacy practices.");
+        caption(notes,"Internet permission is used for owner-requested, checksum-verified AI and voice model downloads. Inference and Hindi speech playback run locally. The app does not request contacts, SMS or call-log access. Samsung Bixby has separate terms.");
         pad(notes,13);
         notes.addView(text("Last encrypted call note",15,INK,true));
         pad(notes,6);
@@ -814,7 +805,6 @@ public final class SecretaryActivity extends Activity {
                     prefs=Prefs.get(this);
                     resetChat();
                     detail="";
-                    voice.useEngine("",ok->runOnUiThread(this::show));
                     show();
                 }).show()));
         gapCard(frame,reset);
@@ -948,8 +938,7 @@ public final class SecretaryActivity extends Activity {
         thinking=false;
         listeningLoop=false;
         if(speech!=null)speech.stop();
-        if(voice!=null)voice.stop();
-        if(neural!=null)neural.stop();
+         if(neural!=null)neural.stop();
     }
     private void speechSettings() {
         try{startActivity(new Intent("com.android.settings.TTS_SETTINGS"));}
