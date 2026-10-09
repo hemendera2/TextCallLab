@@ -9,7 +9,7 @@ public final class HindiLanguage {
         "aap","apka","aapka","mujhe","mujhse","mera","meri","hum","ham","kya",
         "kaise","kab","kahan","kidhar","kaun","kaunsa","batao","bataiye","batana",
         "chahiye","chahie","milna","milega","kitna","kitne","kitni","paise",
-        "kal","aaj","parso","karna","karo","karu","karun","karein","karoge","karni","haan",
+        "kal","aaj","parso","baje","bje","bajey","karna","karo","karu","karun","karein","karoge","karni","haan",
         "nahi","nahin","thik","theek","theekhai","ji","bolna","boliye","suno",
         "shaam","subah","baat","ho","hai","hain","hoga","hainji","se","ko",
         "office","namaste"

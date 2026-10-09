@@ -4,6 +4,7 @@ public final class TestHindiLanguage {
     public static void main(String[] args) {
         yes(HindiLanguage.likelyHindi("कल मीटिंग किस समय है?"),"Devanagari Hindi");
         yes(HindiLanguage.likelyHindi("mujhe kal meeting karni hai"),"Hinglish");
+        yes(HindiLanguage.likelyHindi("kal 5 baje"),"Roman-Hindi appointment time");
         yes(HindiLanguage.likelyHindi("OTP share karu?"),"roman Hindi question");
         yes(HindiLanguage.likelyHindi("accident emergency hai"),"Hinglish emergency");
         yes(HindiLanguage.likelyHindi("namaste"),"roman greeting");
@@ -12,6 +13,6 @@ public final class TestHindiLanguage {
         yes(!HindiLanguage.likelyHindi(null),"null");
         yes(HindiLanguage.replyStyle("kal milna hai").contains("Devanagari"),"Hindi TTS output");
         yes(HindiLanguage.replyStyle("Can you call me?").contains("English"),"English output");
-        System.out.println("PASS: 10 Hindi/English detection and Hindi speech-style regressions");
+        System.out.println("PASS: 11 Hindi/English detection and Hindi speech-style regressions");
     }
 }

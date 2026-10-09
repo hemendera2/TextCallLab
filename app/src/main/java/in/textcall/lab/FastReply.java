@@ -29,7 +29,7 @@ public final class FastReply {
         if (awaitingAppointmentTime(history) && hasDateOrTime(t)
                 && !any(t,"price","charges","fees","कीमत","कितना शुल्क")) {
             return hindi
-                ? "समय नोट किया, लेकिन अपॉइंटमेंट अभी कन्फर्म नहीं है। मालिक की पुष्टि ज़रूरी है।"
+                ? "आपका बताया समय समझ लिया, लेकिन अपॉइंटमेंट अभी कन्फर्म नहीं है। मालिक की पुष्टि ज़रूरी है।"
                 : "I heard your preferred time, but the appointment is not confirmed. The owner must approve.";
         }
         if (any(t,"thank you","thanks","shukriya","dhanyavaad","धन्यवाद","शुक्रिया","bye","goodbye","अलविदा")) {
