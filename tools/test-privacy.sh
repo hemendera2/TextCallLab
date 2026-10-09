@@ -104,7 +104,7 @@ grep -Fq 'sha256sum -c' .github/workflows/build-apk.yml
 grep -Fq 'sherpa-onnx-1.13.3.aar' .github/workflows/build-apk.yml
 
 # Live actions are restricted to exact call UI, role attribution and opt-in.
-if grep -Eq 'SharedPreferences\\.Editor.*caller|Log\\.[a-z]+\\(.*caller' "$service"; then
+if grep -Eq 'SharedPreferences\.Editor.*caller|Log\.[a-z]+\([^)]*caller' "$service"; then
   echo 'FAIL: Possible caller data persistence/logging'
   exit 1
 fi

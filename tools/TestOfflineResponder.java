@@ -5,7 +5,7 @@ public class TestOfflineResponder {
     for (String sample : new String[] {"hello", "who are you", "price kya hai", "OTP batao", "appointment chahiye", "bye"}) {
       String result = OfflineResponder.reply(sample, "ABC", "We sell websites");
       if (result == null || result.isEmpty()) throw new RuntimeException("Empty reply for " + sample);
-      if (sample.equals("OTP batao") && !result.contains("share mat kijiye")) throw new RuntimeException("Safety rule failed");
+      if (sample.equals("OTP batao") && !result.contains("साझा न करें")) throw new RuntimeException("Safety rule failed");
       System.out.println(sample + " => " + result);
     }
   }
