@@ -16,6 +16,8 @@ for permission in READ_SMS READ_CONTACTS READ_CALL_LOG READ_PHONE_STATE SYSTEM_A
 done
 grep -Fq 'android:allowBackup="false"' "$manifest"
 grep -Fq 'android:dataExtractionRules="@xml/data_extraction_rules"' "$manifest"
+grep -Fq 'android:fullBackupContent="@xml/backup_rules"' "$manifest"
+grep -Fq '<exclude domain="sharedpref" path="." />' app/src/main/res/xml/backup_rules.xml
 grep -Fq '<device-transfer>' app/src/main/res/xml/data_extraction_rules.xml
 grep -Fq '<exclude domain="sharedpref" path="." />' app/src/main/res/xml/data_extraction_rules.xml
 grep -Fq 'android:packageNames="com.samsung.android.incallui"' "$access"
