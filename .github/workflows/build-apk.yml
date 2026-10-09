@@ -107,6 +107,16 @@ jobs:
           cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
           # Report nonfatal warnings as evidence; never claim clean lint if warnings remain.
           grep -E "^[0-9]+ errors?, [0-9]+ warnings?" app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt || true
+      - name: Attach lint diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KALLVO-android-lint-diagnostics
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Verify both native inference engines in APK
         run: |
           set -euo pipefail

@@ -47,8 +47,15 @@ final class LocalSpeechInput {
         checkHindiApi33(result);
     }
 
+    // Android lint does not propagate TargetApi to this anonymous API-33-only
+    // RecognitionSupportCallback implementation. Runtime gate is repeated here.
     @android.annotation.TargetApi(33)
+    @android.annotation.SuppressLint("NewApi")
     private void checkHindiApi33(LanguageCheck result) {
+        if (Build.VERSION.SDK_INT < 33) {
+            result.done("Hindi pack inspection requires Android 13 or newer.", false);
+            return;
+        }
         final SpeechRecognizer probe;
         try {
             probe = SpeechRecognizer.createOnDeviceSpeechRecognizer(context);
