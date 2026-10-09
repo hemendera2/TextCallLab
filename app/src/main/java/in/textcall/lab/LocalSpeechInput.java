@@ -43,6 +43,12 @@ final class LocalSpeechInput {
             result.done("On-device recognizer exists. Installed Hindi pack cannot be checked by this Android version.", false);
             return;
         }
+        // Only invoke Android 13+ APIs behind the explicit runtime gate above.
+        checkHindiApi33(result);
+    }
+
+    @android.annotation.TargetApi(33)
+    private void checkHindiApi33(LanguageCheck result) {
         final SpeechRecognizer probe;
         try {
             probe = SpeechRecognizer.createOnDeviceSpeechRecognizer(context);
