@@ -602,8 +602,17 @@ public final class SecretaryActivity extends Activity {
                 LocalModel.get().downloadRecommended(this,(ok,msg)->runOnUiThread(()->{
                     callState=msg;
                     if(target!=null)target.setText(msg);
-                    toast(msg);
-                    if(ok && foreground)show();
+                    if(ok) {
+                        callState="AI downloaded once. Loading from phone…";
+                        LocalModel.get().load(this,(loaded,info)->runOnUiThread(()->{
+                            callState=info;
+                            if(foreground)show();
+                            if(!loaded)toast(info);
+                        }));
+                    } else {
+                        toast(msg);
+                        if(foreground)show();
+                    }
                 }));
                 final Runnable[] refresh=new Runnable[1];
                 refresh[0]=()->{
@@ -818,8 +827,16 @@ public final class SecretaryActivity extends Activity {
             LocalModel.get().importUri(this,data.getData(),(ok,message)->
                     runOnUiThread(()->{
                         callState=message;
-                        if(foreground)show();
-                        if(!ok)toast(message);
+                        if(ok){
+                            LocalModel.get().load(this,(loaded,info)->runOnUiThread(()->{
+                                callState=info;
+                                if(foreground)show();
+                                if(!loaded)toast(info);
+                            }));
+                        } else {
+                            if(foreground)show();
+                            toast(message);
+                        }
                     }));
             show();
         }

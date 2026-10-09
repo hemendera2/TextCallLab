@@ -21,6 +21,22 @@ android {
         }
     }
 
+    // One immutable private signing identity is required for data-preserving APK upgrades.
+    // Secrets are injected only by CI; never place the keystore/password in source control.
+    if (System.getenv('KALLVO_ANDROID_KEYSTORE_FILE')) {
+        signingConfigs {
+            kallvoStable {
+                storeFile file(System.getenv('KALLVO_ANDROID_KEYSTORE_FILE'))
+                storePassword System.getenv('KALLVO_ANDROID_STORE_PASSWORD')
+                keyAlias System.getenv('KALLVO_ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('KALLVO_ANDROID_KEY_PASSWORD')
+            }
+        }
+        buildTypes {
+            debug { signingConfig signingConfigs.kallvoStable }
+        }
+    }
+
     externalNativeBuild {
         cmake {
             path file('src/main/cpp/CMakeLists.txt')

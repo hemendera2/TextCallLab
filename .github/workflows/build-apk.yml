@@ -66,6 +66,27 @@ jobs:
         run: bash tools/test-privacy.sh
       - name: Offline response regression tests
         run: sh tools/test-local.sh
+      - name: Restore persistent APK signing identity (if configured)
+        shell: bash
+        env:
+          STORE_B64: ${{ secrets.KALLVO_ANDROID_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.KALLVO_ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KALLVO_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KALLVO_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${STORE_B64}" && -n "${STORE_PASSWORD}" && -n "${KEY_ALIAS}" && -n "${KEY_PASSWORD}" ]]; then
+            KEYSTORE="$RUNNER_TEMP/kallvo-stable.jks"
+            printf '%s' "$STORE_B64" | base64 --decode > "$KEYSTORE"
+            chmod 600 "$KEYSTORE"
+            echo "KALLVO_ANDROID_KEYSTORE_FILE=$KEYSTORE" >> "$GITHUB_ENV"
+            echo "KALLVO_ANDROID_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KALLVO_ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "KALLVO_ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "Stable signing identity restored from GitHub encrypted secrets."
+          else
+            echo "::warning::Using per-run DEBUG signing. This APK may not update an earlier APK; uninstalling erases downloaded AI/voice packs. Configure the four KALLVO_ANDROID_* signing secrets for data-preserving upgrades."
+          fi
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Verify both native inference engines in APK

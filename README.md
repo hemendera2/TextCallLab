@@ -1,3 +1,12 @@
+# KALLVO v1.0.1 — actual setup and navigation repairs
+
+- Startup opens directly on **Assistant**, not an otherwise empty promotional Home. **Assistant / Settings** are the only bottom tabs. Android Back (including Android 13+ gesture callbacks) returns subpages to Settings, then Assistant; Back from Assistant minimizes KALLVO.
+- A previously saved app-private AI model is **reloaded in the background on next app start**. Importing/downloaded AI now also loads itself after completion; there is no need for another download or a second "load" step. Saved GGUF installation and loaded RAM state remain separate.
+- GGUF replacement is verified before replacing the previous file, avoiding deletion of a valid model on incomplete download/import. Voice playback waits for Android AudioTrack's actual playback head instead of sleeping for total audio duration again.
+- **Important APK upgrade limitation:** Android preserves models across upgrades only if the package identity and signing certificate match. GitHub Actions previously built a newly signed default debug APK each run. An uninstall erases BOTH app-private AI and voice assets. CI now supports four private GitHub Actions secrets: `KALLVO_ANDROID_KEYSTORE_B64` (Base64-encoded JKS bytes), `KALLVO_ANDROID_STORE_PASSWORD`, `KALLVO_ANDROID_KEY_ALIAS`, and `KALLVO_ANDROID_KEY_PASSWORD`. Supply the same signing identity for EVERY future APK. Without them CI explicitly warns; a green debug APK does **not** guarantee a data-preserving install. Do not commit a keystore/password. Any old debug build signed with a different identity will still require a one-time migration/reinstall; no app can transparently preserve erased private files.
+- **Still not a certified AI call handler.** For real cellular calls, Samsung Text Call uses **Samsung's voice**, not KALLVO's selected Supertonic voice. The current ordinary Android app does not own carrier call audio. Experimental Samsung UI automation is still unverified. No test or implementation can honestly claim the caller hears the locally selected voice without a supported telephony audio path.
+- Verified only by source review until a fresh CI result and A52s acceptance run are available.
+
 # KALLVO v1.0 — unified Hindi AI secretary prototype
 
 ## Unified app, zero subscription
