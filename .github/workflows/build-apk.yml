@@ -67,6 +67,8 @@ jobs:
         run: bash tools/test-privacy.sh
       - name: Offline response regression tests
         run: sh tools/test-local.sh
+      - name: Live-call gateway protocol tests (mock; no provider)
+        run: python3 -m unittest discover -s gateway/tests -v
       - name: Restore persistent APK signing identity (if configured)
         shell: bash
         env:

@@ -5,3 +5,13 @@ local.properties
 *.iml
 *.jks
 *.keystore
+
+# Never commit private PSTN gateway credentials, recorded audio or downloaded model files.
+gateway/.env
+gateway/.venv/
+gateway/models/
+gateway/**/*.wav
+gateway/**/*.pcm
+gateway/**/*.gguf
+gateway/**/__pycache__/
+gateway/**/*.pyc

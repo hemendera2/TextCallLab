@@ -585,6 +585,42 @@ public final class SecretaryActivity extends Activity {
         section(frame,eyebrow,title);
         pad(frame,14);
     }
+    private void selectCallVoice(int selectedId) {
+        neural.setSpeaker(selectedId);
+        if(GatewayVoiceSync.paired(this)){
+            GatewayVoiceSync.sync(this,selectedId,(ok,message)->{
+                if(!ok)toast(message);
+            });
+        }
+        show();
+    }
+    private void pairLiveGateway() {
+        LinearLayout fields=vertical();
+        fields.setPadding(dp(22),dp(10),dp(22),dp(8));
+        caption(fields,"Requires deployed Exotel Voicebot gateway and private owner token. Pairing alone does not activate calls.");
+        pad(fields,10);
+        EditText host=edit("https://your-domain/control/voice","",1);
+        fields.addView(host);
+        pad(fields,9);
+        EditText key=edit("Private owner gateway token","",1);
+        key.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        fields.addView(key);
+        new AlertDialog.Builder(this).setTitle("Pair call voice gateway")
+            .setView(fields).setNegativeButton("Cancel",null)
+            .setPositiveButton("Pair and sync",(d,w)->{
+                try{
+                    GatewayVoiceSync.pair(this,host.getText().toString(),
+                            key.getText().toString());
+                    GatewayVoiceSync.sync(this,neural.speaker(),(ok,msg)->{
+                        toast(msg);
+                        if("calls".equals(detail))show();
+                    });
+                }catch(Exception e){
+                    toast(e.getMessage()==null?"Could not pair gateway":e.getMessage());
+                }
+            }).show();
+    }
     private void showVoices() {
         backTitle("NATURAL HINDI VOICE","One voice. One app.");
         LinearLayout intro=card();
@@ -626,8 +662,7 @@ public final class SecretaryActivity extends Activity {
             final int startId=i==0?0:5;
             TextView choice=press(pair[i]+"  "+(neural.speaker()<5?"":"").trim(),
                     neural.speaker()/5==i,()->{
-                        neural.setSpeaker(startId);
-                        show();
+                        selectCallVoice(startId);
                     });
             row.addView(choice,new LinearLayout.LayoutParams(0,dp(49),1f));
             if(i==0)row.addView(new View(this),new LinearLayout.LayoutParams(dp(8),1));
@@ -640,9 +675,8 @@ public final class SecretaryActivity extends Activity {
             for(int i=0;i<5;i++)labels[i]=(female?"Female ":"Male ")+(i+1);
             new AlertDialog.Builder(this).setTitle("Pick a voice")
                 .setSingleChoiceItems(labels,neural.speaker()%5,(dialog,which)->{
-                    neural.setSpeaker((female?0:5)+which);
                     dialog.dismiss();
-                    show();
+                    selectCallVoice((female?0:5)+which);
                 }).setNegativeButton("Cancel",null).show();
         }));
         pad(chooser,11);
@@ -801,6 +835,32 @@ public final class SecretaryActivity extends Activity {
         status.addView(press("Open Android Accessibility",false,()->startActivity(
                 new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
         gapCard(frame,status);
+
+        LinearLayout gateway=card();
+        gateway.addView(text("REAL CALL VOICE GATEWAY",11,BLUE,true));
+        pad(gateway,7);
+        gateway.addView(text(GatewayVoiceSync.paired(this)
+                ? "Gateway paired · live calls not yet certified"
+                : "Not connected · Exotel + hosted gateway required",14,INK,true));
+        pad(gateway,8);
+        caption(gateway,"Pair a verified HTTPS call gateway to synchronize this app's selected Supertonic speaker. No SIM audio passes through this Android app. Pairing does not enable call forwarding.");
+        pad(gateway,11);
+        gateway.addView(press(GatewayVoiceSync.paired(this)?"Update gateway pairing":
+                "Pair live-call gateway",false,this::pairLiveGateway));
+        if(GatewayVoiceSync.paired(this)){
+            pad(gateway,8);
+            gateway.addView(press("Sync selected voice to gateway",true,()->
+                GatewayVoiceSync.sync(this,neural.speaker(),(ok,msg)->toast(msg))));
+            pad(gateway,7);
+            gateway.addView(press("Disconnect phone pairing",false,()->new AlertDialog.Builder(this)
+                .setTitle("Remove saved gateway credentials?")
+                .setMessage("This only disconnects KALLVO phone settings. It does NOT stop Exotel calls or forwarding.")
+                .setNegativeButton("Cancel",null)
+                .setPositiveButton("Disconnect",(d,w)->{
+                    GatewayVoiceSync.disconnect(this);show();
+                }).show()));
+        }
+        gapCard(frame,gateway);
 
         LinearLayout toggles=card();
         settingToggle(toggles,"Observe Samsung call screen",Prefs.ENABLED,

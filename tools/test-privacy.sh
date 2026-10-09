@@ -31,6 +31,9 @@ grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/PrivateBriefStore.j
 grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/SecretaryTaskStore.java
 grep -Fq 'AES/GCM/NoPadding' app/src/main/java/in/textcall/lab/SecretaryTaskStore.java
 grep -Fq 'showActionInbox();' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'GatewayVoiceSync.pair(this' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'AndroidKeyStore' app/src/main/java/in/textcall/lab/GatewayVoiceSync.java
+grep -Fq 'setInstanceFollowRedirects(false)' app/src/main/java/in/textcall/lab/GatewayVoiceSync.java
 for rule in 'tab==selected?PALE:WHITE' 'tab==selected?BLUE:SOFT' 'tab==selected?BLUE:SOFT,tab==selected' 'if(tab==selected && detail.isEmpty())return;' 'eraseAll()'; do
     grep -Fq "$rule" app/src/main/java/in/textcall/lab/SecretaryActivity.java || grep -Fq "$rule" app/src/main/java/in/textcall/lab/SecretaryTaskStore.java
 done
