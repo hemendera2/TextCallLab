@@ -15,6 +15,7 @@ class CallSession:
         self.pcm=bytearray()
         self.voiced_ms=0
         self.quiet_ms=0
+        self.interrupted=False
         self.pending=None
         self.turn=None
         self.voice=None
@@ -65,10 +66,15 @@ class CallSession:
         if talking:
             self.voiced_ms+=duration
             self.quiet_ms=0
-            if self.voiced_ms>=150 and self.voice and not self.voice.done():
-                self.epoch+=1
-                self.voice.cancel()
-                await self.emit(clear(self.sid))
+            if self.voiced_ms>=150 and not self.interrupted:
+                old_voice=self.voice and not self.voice.done()
+                old_answer=self.turn and not self.turn.done()
+                if old_voice or old_answer:
+                    self.interrupted=True
+                    self.epoch+=1
+                    if old_voice:
+                        self.voice.cancel()
+                        await self.emit(clear(self.sid))
             self.pcm.extend(pcm)
         elif self.voiced_ms:
             self.quiet_ms+=duration
@@ -91,6 +97,7 @@ class CallSession:
         self.pcm.clear()
         self.voiced_ms=0
         self.quiet_ms=0
+        self.interrupted=False
 
     async def answer(self,clip):
         generation=self.epoch
@@ -141,7 +148,13 @@ class CallSession:
         except asyncio.CancelledError:
             return
         except Exception:
-            return
+            # No fabricated voice fallback if synthesizer itself failed.
+            # Close WSS so Exotel can advance to its configured next applet.
+            await self.close()
+            try:
+                await self.socket.close(code=1011)
+            except Exception:
+                pass
 
     async def close(self):
         self.closed=True
@@ -149,6 +162,6 @@ class CallSession:
         self.reset_audio()
         self.pending=None
         for task in (self.turn,self.voice):
-            if task and not task.done():
+            if task and not task.done() and task is not asyncio.current_task():
                 task.cancel()
         self.history.clear()

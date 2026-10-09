@@ -11,8 +11,8 @@ _engine=None
 
 def _secret(name,min_len):
     value=os.getenv(name,"")
-    if len(value)<min_len:
-        raise RuntimeError("Missing or weak "+name)
+    if len(value)<min_len or "REPLACE" in value.upper() or "CHANGE_ME" in value.upper():
+        raise RuntimeError("Missing, default or weak "+name)
     return value
 
 @app.on_event("startup")

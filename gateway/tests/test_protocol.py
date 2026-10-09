@@ -10,8 +10,11 @@ from kallvo_gateway.session import CallSession
 class Socket:
     def __init__(self):
         self.events=[]
+        self.close_codes=[]
     async def send_json(self,event):
         self.events.append(event)
+    async def close(self,code=1000):
+        self.close_codes.append(code)
 
 class Engine:
     speaker_id=3
@@ -61,6 +64,15 @@ class Session(unittest.IsolatedAsyncioTestCase):
         await session.close()
         self.assertTrue(session.closed)
         self.assertFalse(session.history)
+    async def test_single_barge_in_clear(self):
+        sock=Socket()
+        session=CallSession(sock,Engine())
+        await session.handle({"event":"start","stream_sid":"MZ2","start":{}})
+        noisy=base64.b64encode(b"\0\x10"*800).decode()
+        for i in range(4):
+            await session.handle({"event":"media","stream_sid":"MZ2","media":{"payload":noisy}})
+        self.assertLessEqual(len([x for x in sock.events if x["event"]=="clear"]),1)
+        await session.close()
     async def test_stream_guard(self):
         session=CallSession(Socket(),Engine())
         await session.handle({"event":"media","stream_sid":"wrong",

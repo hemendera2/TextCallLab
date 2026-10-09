@@ -955,6 +955,7 @@ public final class SecretaryActivity extends Activity {
                 .setPositiveButton("Reset",(d,w)->{
                     stopTurn();
                     new PrivateBriefStore(this).clear();
+                    GatewayVoiceSync.disconnect(this);
                     if(!new SecretaryTaskStore(this).eraseAll()){
                         toast("Reset blocked: could not clear encrypted tasks");return;
                     }
