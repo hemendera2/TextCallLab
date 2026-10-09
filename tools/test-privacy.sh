@@ -72,7 +72,7 @@ grep -Fq 'new NeuralVoice(this)' app/src/main/java/in/textcall/lab/SecretaryActi
 grep -Fq 'neural.speak' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'Choose speaker style' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'Install voice pack' app/src/main/java/in/textcall/lab/SecretaryActivity.java
-grep -Fq 'voice.setStatusListener' app/src/main/java/in/textcall/lab/SecretaryActivity.java
+grep -Fq 'neural.listen' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'voiceHealthView=text' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'Check Hindi speech recognition' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'checkRecognitionSupport' app/src/main/java/in/textcall/lab/LocalSpeechInput.java
@@ -88,7 +88,7 @@ grep -Fq 'android.permission.INTERNET' "$manifest"
 grep -Fq 'SHA256 =' app/src/main/java/in/textcall/lab/NeuralVoice.java
 grep -Fq 'validArchive(zip)' app/src/main/java/in/textcall/lab/NeuralVoice.java
 grep -Fq 'OfflineTtsSupertonicModelConfig' app/src/main/java/in/textcall/lab/NeuralVoice.java
-grep -Fq 'tts.generateWithConfigAndCallback' app/src/main/java/in/textcall/lab/NeuralVoice.java
+grep -Fq 'tts.generateWithConfig' app/src/main/java/in/textcall/lab/NeuralVoice.java
 grep -Fq 'AudioTrack' app/src/main/java/in/textcall/lab/NeuralVoice.java
 grep -Fq 'One voice. One app.' app/src/main/java/in/textcall/lab/SecretaryActivity.java
 grep -Fq 'mavenCentral()' settings.gradle
