@@ -26,6 +26,10 @@ class Engine:
         assert sid==3
         return b"\x01\x00"*int(rate*0.25)
 
+class FaultyEngine(Engine):
+    def synthesize(self,text,rate,sid):
+        raise RuntimeError("TTS unavailable")
+
 class Protocol(unittest.TestCase):
     def test_media_codec(self):
         data=b"\x00\x10"*1600
@@ -73,6 +77,13 @@ class Session(unittest.IsolatedAsyncioTestCase):
             await session.handle({"event":"media","stream_sid":"MZ2","media":{"payload":noisy}})
         self.assertLessEqual(len([x for x in sock.events if x["event"]=="clear"]),1)
         await session.close()
+    async def test_failed_voice_ends_gateway_stream(self):
+        sock=Socket()
+        call=CallSession(sock,FaultyEngine())
+        await call.handle({"event":"start","stream_sid":"MZFAIL","start":{}})
+        await asyncio.sleep(.1)
+        self.assertTrue(call.closed)
+        self.assertEqual(sock.close_codes,[1011])
     async def test_stream_guard(self):
         session=CallSession(Socket(),Engine())
         await session.handle({"event":"media","stream_sid":"wrong",

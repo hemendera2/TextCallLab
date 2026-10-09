@@ -148,13 +148,13 @@ class CallSession:
         except asyncio.CancelledError:
             return
         except Exception:
-            # No fabricated voice fallback if synthesizer itself failed.
-            # Close WSS so Exotel can advance to its configured next applet.
-            await self.close()
+            # Close provider WSS FIRST. Cancelling an answer task first may cancel
+            # the TTS task it awaits, preventing the socket close and fallback.
             try:
                 await self.socket.close(code=1011)
             except Exception:
                 pass
+            await self.close()
 
     async def close(self):
         self.closed=True
