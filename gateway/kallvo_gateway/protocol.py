@@ -25,7 +25,9 @@ def decode_media(event):
         pcm=base64.b64decode(payload,validate=True)
     except Exception as e:
         raise ValueError("Bad base64") from e
-    if len(pcm)>100000 or len(pcm)%2 or not pcm:
+    # Exotel streams PCM chunks (normally ~100 ms). Reject tiny fragments as
+    # truncated frames rather than treating them as speech/silence.
+    if len(pcm)>100000 or len(pcm)<320 or len(pcm)%2:
         raise ValueError("PCM16 alignment or size")
     return pcm
 
